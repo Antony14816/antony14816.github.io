@@ -1,43 +1,132 @@
 /* ==========================================================================
-   Mashup Ours — ドット絵風ダークテーマ
-   参考: ピンク×ニアブラック×等幅×ピクセル装飾のレトロWeb
+   Mashup Ours — 16bit交配研究所テーマ（DESIGN.md 準拠）
 
-   チャート（家系図）パレットは dataviz 手順で検証済み:
-     surface #15121c / series-1 #00a0c8 / series-2 #ef3b80
-     → ライトネス帯・彩度下限・CVD分離・通常視覚・コントラスト全PASS
-   テキストは必ずインクトークン（--ink / --ink-2 / --muted）を使う。
+   - デザイントークンは CSS カスタムプロパティで集中管理（§8）
+   - ダーク / ライトを切り替え可能。既定は OS 設定、localStorage で永続化
+   - ウィンドウ = 太い外枠 + 内側の細い線 + 右下のハードシャドウ（§3.4）
+   - 家系図の系列色は validate_palette.js で両テーマ・両面PASS済み:
+       ダーク: #12A87D / #D96B4F on #303C51
+       ライト: #0F9D72 / #C15733 on #FFFCF0
+     CVDは6〜8のWARN帯 → 凡例 + 実線/破線 + ノードラベルで二重化（§5.5）
+   - テキストは必ず --text / --text-dim を使う（コントラスト AA 確保）
    ========================================================================== */
 
+/* --- 固定パレット（DESIGN.md §3.2 初期パレット・両テーマ共通） ---------- */
 :root {
+  --lab-ink: #202735;
+  --lab-night: #303c51;
+  --lab-paper: #f7e9c9;
+  --lab-cream: #fff5de;
+  --lab-mint: #78c4ae;
+  --lab-yellow: #f4c95d;
+  --lab-coral: #e47e62;
+  --lab-lilac: #a9a2cd;
+
+  --font-dot: "DotGothic16", "MS Gothic", monospace;
+  --font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+/* --- ロールトークン: ライト（既定） ------------------------------------- */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: var(--lab-cream);
+  --window: #fffcf0;
+  --window-2: #f4ecd8;
+  --node-fill: #ffffff;
+  --line: var(--lab-ink); /* 太い外枠 */
+  --inner: #d9cba8; /* 内側の細い線 */
+  --shadow: rgba(32, 39, 53, 0.3);
+
+  --text: var(--lab-ink);
+  --text-dim: #4a5468;
+  --focus: var(--lab-ink);
+  --link: #0b7d5a;
+
+  --action: var(--lab-coral);
+  --action-ink: var(--lab-ink);
+
+  --series-1: #0f9d72; /* 元作品（検証済み） */
+  --series-2: #c15733; /* 子作品（検証済み） */
+  --edge: #857e6b;
+
+  --badge-idea-bg: #fbede6;
+  --badge-idea-line: #c15733;
+  --badge-idea-ink: #8f3d1e;
+  --badge-sample-bg: #fdf3dc;
+  --badge-sample-line: #b8911f;
+  --badge-sample-ink: #6e5410;
+}
+
+/* --- ロールトークン: ダーク --------------------------------------------- */
+/* OS設定がダークで、明示的なライト指定がないとき */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --bg: var(--lab-ink);
+    --window: var(--lab-night);
+    --window-2: #26314a;
+    --node-fill: #283247;
+    --line: #141a26;
+    --inner: #46546f;
+    --shadow: #10151f;
+
+    --text: var(--lab-paper);
+    --text-dim: #c4bca2;
+    --focus: var(--lab-yellow);
+    --link: var(--lab-mint);
+
+    --action: var(--lab-coral);
+    --action-ink: var(--lab-ink);
+
+    --series-1: #12a87d;
+    --series-2: #d96b4f;
+    --edge: #7a89a8;
+
+    --badge-idea-bg: rgba(217, 107, 79, 0.18);
+    --badge-idea-line: #d96b4f;
+    --badge-idea-ink: #f2b8a2;
+    --badge-sample-bg: rgba(244, 201, 93, 0.14);
+    --badge-sample-line: #f4c95d;
+    --badge-sample-ink: #f4c95d;
+  }
+}
+/* 明示的にダークが選ばれているとき */
+:root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #0a0810;
-  --grid: rgba(126, 116, 168, 0.055);
-  --panel: #15121c;
-  --panel-2: #1d1926;
-  --border: #322c40;
-  --shadow: #000;
+  --bg: var(--lab-ink);
+  --window: var(--lab-night);
+  --window-2: #26314a;
+  --node-fill: #283247;
+  --line: #141a26;
+  --inner: #46546f;
+  --shadow: #10151f;
 
-  /* ink tokens（テキストはここだけ使う） */
-  --ink: #f2f0f7;
-  --ink-2: #b9b4c7;
-  --muted: #7e7a8f;
+  --text: var(--lab-paper);
+  --text-dim: #c4bca2;
+  --focus: var(--lab-yellow);
+  --link: var(--lab-mint);
 
-  /* UIアクセント（装飾・ボタン・見出しの線） */
-  --accent: #ff5c92;
-  --accent-deep: #ef3b80;
-  --link: #56cdf3;
-  --sample: #ffc24b;
-  --danger: #ff6b61;
+  --action: var(--lab-coral);
+  --action-ink: var(--lab-ink);
 
-  /* チャート系列色（検証済み・勝手に替えない） */
-  --series-1: #00a0c8; /* ProtoPedia 元作品 */
-  --series-2: #ef3b80; /* AI生成の子作品 */
+  --series-1: #12a87d;
+  --series-2: #d96b4f;
+  --edge: #7a89a8;
 
-  --font-pixel: "DotGothic16", "MS Gothic", "Osaka-Mono", monospace;
-  --font-en: "Press Start 2P", ui-monospace, monospace;
-  --font-mono: ui-monospace, "SFMono-Regular", "DotGothic16", monospace;
+  --badge-idea-bg: rgba(217, 107, 79, 0.18);
+  --badge-idea-line: #d96b4f;
+  --badge-idea-ink: #f2b8a2;
+  --badge-sample-bg: rgba(244, 201, 93, 0.14);
+  --badge-sample-line: #f4c95d;
+  --badge-sample-ink: #f4c95d;
 }
+
+/* --- ベース -------------------------------------------------------------- */
 
 * {
   box-sizing: border-box;
@@ -49,131 +138,78 @@ html {
 
 body {
   margin: 0;
-  font-family: var(--font-pixel);
+  font-family: var(--font-body);
   font-size: 16px;
-  line-height: 1.7;
-  color: var(--ink);
-  /* グリッド調テクスチャ（参考画像の背景） */
-  background-color: var(--bg);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 24px 24px;
+  line-height: 1.8;
+  color: var(--text);
+  background: var(--bg);
 }
 
 a {
   color: var(--link);
-  text-decoration: underline dashed;
+  text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 a:hover {
-  color: var(--accent);
+  color: var(--text);
+  text-decoration-thickness: 2px;
 }
 
 :focus-visible {
-  outline: 2px dotted var(--link);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
 .wrap {
-  position: relative;
-  max-width: 1080px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 24px 16px 80px;
+  padding: 20px 16px 80px;
 }
 
-/* --- ピクセル装飾 ------------------------------------------------------- */
+/* --- ウィンドウ（太い外枠 + 内側の線 + ハードシャドウ / §3.4） ---------- */
 
-/* パネルの四隅にL字コーナーブラケット（参考画像のコーナー装飾） */
-.panel,
-.notice,
-.detail {
-  position: relative;
+.window {
+  background: var(--window);
+  border: 3px solid var(--line);
+  box-shadow:
+    inset 0 0 0 2px var(--inner),
+    5px 5px 0 var(--shadow);
+  border-radius: 0;
 }
 
-.panel::before,
-.notice::before,
-.detail::before {
-  content: "";
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  width: 9px;
-  height: 9px;
-  border-top: 2px solid var(--accent);
-  border-left: 2px solid var(--accent);
-  pointer-events: none;
+.titlebar {
+  font-family: var(--font-dot);
+  font-size: 0.92rem;
+  letter-spacing: 0.18em;
+  color: var(--lab-paper);
+  background: var(--line);
+  padding: 5px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.panel::after,
-.detail::after {
-  content: "";
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  width: 9px;
-  height: 9px;
-  border-right: 2px solid var(--series-1);
-  border-bottom: 2px solid var(--series-1);
-  pointer-events: none;
-}
-
-/* 浮遊するピクセルスプライト（参考画像の端末装飾） */
-.sprite {
-  position: absolute;
-  image-rendering: pixelated;
-  opacity: 0.5;
-  pointer-events: none;
-  animation: sprite-blink 2.4s steps(2, end) infinite;
-}
-
-.sprite.s1 {
-  top: 90px;
-  right: 4px;
-}
-
-.sprite.s2 {
-  top: 320px;
-  left: 0;
-  animation-delay: 1.2s;
-}
-
-@keyframes sprite-blink {
-  0%,
-  100% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 0.15;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sprite {
-    animation: none;
-  }
-}
-
-/* 狭い画面ではコンテンツと重なるので装飾スプライトは隠す */
-@media (max-width: 760px) {
-  .sprite {
-    display: none;
-  }
-}
-
-/* --- ヘッダー ------------------------------------------------------------ */
+/* --- ヘッダー ------------------------------------------------------------- */
 
 header.hero {
-  padding: 28px 0 8px;
+  padding: 16px 0 4px;
+}
+
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .eyebrow {
-  color: var(--accent);
-  font-family: var(--font-pixel);
-  font-size: 0.8rem;
-  letter-spacing: 0.35em;
-  margin: 0 0 10px;
+  font-family: var(--font-dot);
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  letter-spacing: 0.3em;
+  margin: 0 0 8px;
 }
 
 .hero-title-row {
@@ -183,94 +219,168 @@ header.hero {
 }
 
 .hero-title-row .logo {
-  image-rendering: pixelated;
   flex: none;
+}
+
+/* ロゴ: ミント×珊瑚の交差（テーマ色に追従） */
+.logo .m1 {
+  fill: var(--series-1);
+}
+.logo .m2 {
+  fill: var(--series-2);
+}
+.logo .m0 {
+  fill: var(--text);
 }
 
 header.hero h1 {
   margin: 0;
-  font-family: var(--font-en);
-  font-size: clamp(1.15rem, 4vw, 1.9rem);
+  font-family: var(--font-dot);
+  font-weight: normal;
+  font-size: clamp(1.6rem, 5vw, 2.6rem);
   letter-spacing: 0.06em;
-  line-height: 1.4;
-  color: var(--ink);
-  text-shadow: 3px 3px 0 var(--shadow);
+  line-height: 1.3;
+  color: var(--text);
 }
 
 header.hero .copy {
-  color: var(--accent);
-  font-size: 1.05rem;
-  margin: 10px 0 0;
-  letter-spacing: 0.08em;
+  color: var(--series-2);
+  font-size: 1.02rem;
+  margin: 8px 0 0;
+  letter-spacing: 0.04em;
 }
 
-/* --- 通知 --------------------------------------------------------------- */
+/* テーマ切り替えボタン */
+button.theme-toggle {
+  font-family: var(--font-dot);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  background: var(--window);
+  color: var(--text);
+  border: 3px solid var(--line);
+  box-shadow: inset 0 0 0 2px var(--inner);
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button.theme-toggle:hover {
+  background: var(--window-2);
+}
+
+button.theme-toggle:active {
+  transform: translate(2px, 2px);
+}
+
+/* --- 所長のメモ（セリフウィンドウ） -------------------------------------- */
+
+.memo {
+  margin-top: 16px;
+  padding: 12px 16px 14px;
+}
+
+.memo p {
+  margin: 10px 0 0;
+  font-size: 0.97rem;
+  color: var(--text);
+}
+
+.memo p::before {
+  content: "▶ ";
+  color: var(--series-2);
+}
+
+/* --- 通知 ---------------------------------------------------------------- */
 
 .notice {
-  border: 2px solid var(--border);
-  background: var(--panel);
-  box-shadow: 4px 4px 0 var(--shadow);
   padding: 12px 16px;
-  margin: 18px 0;
-  font-size: 0.92rem;
-  color: var(--ink-2);
+  margin: 16px 0;
+  font-size: 0.93rem;
+  color: var(--text);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
 }
 
-.notice strong {
-  color: var(--accent);
-}
-
-.notice.warn {
-  border-color: var(--sample);
-  color: var(--sample);
-}
-
-.notice.warn::before {
-  border-color: var(--sample);
-}
-
-.notice.error {
-  border-color: var(--danger);
-  color: var(--danger);
+.notice::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 7px;
+  background: var(--lab-yellow);
+  border: 2px solid var(--line);
 }
 
 .notice.error::before {
-  border-color: var(--danger);
+  background: var(--lab-coral);
 }
 
-/* --- セクション ---------------------------------------------------------- */
+.notice strong {
+  color: var(--series-2);
+  font-weight: 700;
+}
+
+.notice.warn strong {
+  color: var(--badge-sample-ink);
+}
+
+/* --- セクション ------------------------------------------------------------ */
 
 section {
-  margin-top: 34px;
+  margin-top: 36px;
 }
 
 section > h2 {
-  font-size: 1.15rem;
+  font-family: var(--font-dot);
   font-weight: normal;
+  font-size: 1.2rem;
   letter-spacing: 0.12em;
-  margin: 0 0 12px;
-  color: var(--ink);
+  color: var(--text);
+  margin: 0 0 14px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--line);
 }
 
 section > h2::before {
   content: "▸ ";
-  color: var(--accent);
+  color: var(--action);
 }
 
-.panel {
-  background: var(--panel);
-  border: 2px solid var(--border);
-  box-shadow: 4px 4px 0 var(--shadow);
-  padding: 18px;
+/* --- 交配マシン（親作品選択） --------------------------------------------- */
+
+.machine {
+  padding-bottom: 18px;
 }
 
-/* --- 親選択 -------------------------------------------------------------- */
+.lamps {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.lamp {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--lab-paper);
+  display: inline-block;
+}
+
+.lamp.mint {
+  background: var(--lab-mint);
+}
+.lamp.yellow {
+  background: var(--lab-yellow);
+}
+.lamp.coral {
+  background: var(--lab-coral);
+}
 
 .picker {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  gap: 12px;
+  gap: 14px;
   align-items: end;
+  padding: 18px 18px 0;
 }
 
 @media (max-width: 720px) {
@@ -281,32 +391,43 @@ section > h2::before {
 
 .picker label {
   display: block;
-  font-size: 0.9rem;
-  color: var(--muted);
-  margin-bottom: 6px;
+  font-family: var(--font-dot);
+  font-size: 0.88rem;
   letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
 }
 
 .picker select {
   width: 100%;
-  padding: 11px 34px 11px 12px;
-  border: 2px solid var(--border);
+  padding: 11px 36px 11px 12px;
+  border: 3px solid var(--line);
   border-radius: 0;
-  background-color: var(--panel-2);
-  /* ピクセル三角のカスタム矢印 */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 2h2v2h2v2h2V6h2V4h2V2h2H0z' fill='%23ff5c92'/%3E%3C/svg%3E");
+  background-color: var(--window-2);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h2v2h2v2h2v2h2v2H6V6H4V4H2V2H0z' fill='%23202735'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   appearance: none;
-  color: var(--ink);
-  font-family: var(--font-pixel);
+  color: var(--text);
+  font-family: var(--font-body);
   font-size: 0.95rem;
-  box-shadow: 3px 3px 0 var(--shadow);
+  box-shadow: inset 0 0 0 2px var(--inner);
+}
+
+:root[data-theme="dark"] .picker select,
+:root:where(:not([data-theme="light"])) .picker select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h2v2h2v2h2v2h2v2H6V6H4V4H2V2H0z' fill='%23F7E9C9'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) .picker select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h2v2h2v2h2v2h2v2H6V6H4V4H2V2H0z' fill='%23202735'/%3E%3C/svg%3E");
+  }
 }
 
 .picker .cross {
-  font-size: 1.3rem;
-  color: var(--accent);
+  font-family: var(--font-dot);
+  font-size: 1.4rem;
+  color: var(--action);
   padding-bottom: 8px;
   text-align: center;
 }
@@ -314,126 +435,160 @@ section > h2::before {
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
-  margin-top: 16px;
+  padding: 16px 18px 0;
+}
+
+/* ボタン: 押下で沈む・状態を明示（§3.4） */
+button.breed,
+button.theme-toggle {
+  transition:
+    transform 0.08s ease,
+    filter 0.12s ease;
 }
 
 button.breed {
-  font-family: var(--font-pixel);
-  font-size: 1rem;
-  font-weight: normal;
-  letter-spacing: 0.06em;
-  background: var(--accent-deep);
-  color: #1a0410;
-  border: 2px solid #ff9ec4;
+  font-family: var(--font-dot);
+  font-size: 1.05rem;
+  letter-spacing: 0.1em;
+  background: var(--action);
+  color: var(--action-ink);
+  border: 3px solid var(--line);
+  box-shadow:
+    inset 0 0 0 2px var(--inner),
+    4px 4px 0 var(--shadow);
   border-radius: 0;
-  padding: 12px 22px;
+  padding: 12px 24px;
   cursor: pointer;
-  box-shadow: 4px 4px 0 var(--shadow);
 }
 
 button.breed:hover:not(:disabled) {
-  background: var(--accent);
+  filter: brightness(1.07);
 }
 
 button.breed:active:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0 var(--shadow);
+  box-shadow:
+    inset 0 0 0 2px var(--inner),
+    2px 2px 0 var(--shadow);
 }
 
 button.breed:disabled {
-  opacity: 0.4;
+  background: var(--window-2);
+  color: var(--text-dim);
   cursor: not-allowed;
+  opacity: 0.75;
 }
 
 .hint {
-  color: var(--muted);
-  font-size: 0.88rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
 }
 
-/* --- 交配枠 -------------------------------------------------------------- */
+/* --- 稼働状況 -------------------------------------------------------------- */
 
 .slot {
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   font-size: 0.95rem;
-  color: var(--ink-2);
+  color: var(--text);
 }
 
 .slot .value {
   font-family: var(--font-mono);
-  color: var(--link);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  font-size: 0.95rem;
+  background: var(--window-2);
+  border: 2px solid var(--line);
   padding: 1px 8px;
+  color: var(--text);
 }
 
-/* --- 子作品リスト --------------------------------------------------------- */
+/* --- 実験記録（最近誕生した発明） ------------------------------------------ */
 
 ul.offspring {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 ul.offspring li {
-  background: var(--panel);
-  border: 2px solid var(--border);
-  box-shadow: 4px 4px 0 var(--shadow);
+  background: var(--window);
+  border: 3px solid var(--line);
+  box-shadow:
+    inset 0 0 0 2px var(--inner),
+    4px 4px 0 var(--shadow);
   padding: 13px 16px;
   cursor: pointer;
 }
 
 ul.offspring li:hover {
-  border-color: var(--series-2);
+  background: var(--window-2);
+}
+
+ul.offspring li:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+ul.offspring .title {
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 ul.offspring .title::before {
   content: "▸ ";
-  color: var(--accent);
+  color: var(--action);
 }
 
-ul.offspring .title {
-  font-weight: normal;
-  letter-spacing: 0.04em;
+ul.offspring li.empty .title::before,
+ul.offspring li.empty::before {
+  content: none;
 }
+
+ul.offspring .hint {
+  margin-top: 2px;
+}
+
+/* --- バッジ（ラベル + 色の二重化） ---------------------------------------- */
 
 .badge {
   display: inline-block;
-  font-size: 0.72rem;
-  font-family: var(--font-pixel);
+  font-family: var(--font-dot);
+  font-size: 0.74rem;
   letter-spacing: 0.08em;
-  border: 1px solid var(--border);
   border-radius: 0;
   padding: 1px 8px;
   margin-left: 6px;
-  color: var(--ink-2);
   vertical-align: middle;
 }
 
-.badge.sample {
-  border-color: var(--sample);
-  color: var(--sample);
-}
-
 .badge.idea {
-  border-color: var(--series-2);
-  color: var(--accent);
+  background: var(--badge-idea-bg);
+  border: 2px solid var(--badge-idea-line);
+  color: var(--badge-idea-ink);
 }
 
-/* --- 家系図 -------------------------------------------------------------- */
+.badge.sample {
+  background: var(--badge-sample-bg);
+  border: 2px solid var(--badge-sample-line);
+  color: var(--badge-sample-ink);
+}
+
+/* --- 家系図 ---------------------------------------------------------------- */
 
 .pedigree-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: 8px 20px;
   margin: 0 0 10px;
-  font-size: 0.85rem;
-  color: var(--ink-2);
+  font-size: 0.87rem;
+  color: var(--text);
+  align-items: center;
 }
 
 .pedigree-legend .key {
@@ -443,26 +598,28 @@ ul.offspring .title {
 }
 
 .pedigree-legend .swatch {
-  width: 14px;
+  width: 16px;
   height: 14px;
   display: inline-block;
-  background: var(--panel-2);
+  background: var(--window);
 }
 
 .pedigree-legend .swatch.proto {
-  border: 2px solid var(--series-1);
+  border: 3px solid var(--series-1);
 }
 
 .pedigree-legend .swatch.child {
-  border: 2px dashed var(--series-2);
+  border: 3px dashed var(--series-2);
+}
+
+.pedigree-legend .scroll-hint {
+  color: var(--text-dim);
+  font-size: 0.82rem;
 }
 
 .pedigree-scroll {
   overflow-x: auto;
-  background: var(--panel);
-  border: 2px solid var(--border);
-  box-shadow: 4px 4px 0 var(--shadow);
-  padding: 10px;
+  padding: 12px;
 }
 
 .pedigree-scroll svg {
@@ -474,55 +631,51 @@ ul.offspring .title {
 }
 
 .pedigree-scroll .node rect {
-  fill: var(--panel-2);
+  fill: var(--node-fill);
+  stroke-width: 3;
   shape-rendering: crispEdges;
 }
 
 .pedigree-scroll .node.proto rect {
-  stroke: var(--series-1);
-  stroke-width: 2;
+  stroke: var(--series-1); /* 実線 = 元作品 */
 }
 
 .pedigree-scroll .node.child rect {
-  stroke: var(--series-2);
-  stroke-width: 2;
-  stroke-dasharray: 6 4;
+  stroke: var(--series-2); /* 破線 = 子作品 */
+  stroke-dasharray: 7 5;
 }
 
 .pedigree-scroll .node:hover rect,
 .pedigree-scroll .node:focus-visible rect {
-  fill: #2a2438;
-  stroke: var(--ink);
+  stroke: var(--text);
 }
 
 .pedigree-scroll .node text {
-  fill: var(--ink);
-  font-family: var(--font-pixel);
+  fill: var(--text);
+  font-family: var(--font-body);
   font-size: 13px;
   pointer-events: none;
 }
 
 .pedigree-scroll .edge {
-  stroke: #3d3652;
+  stroke: var(--edge);
   stroke-width: 2;
   fill: none;
   shape-rendering: crispEdges;
 }
 
-/* --- 詳細パネル ----------------------------------------------------------- */
+/* --- 詳細ウィンドウ --------------------------------------------------------- */
 
 .detail {
-  background: var(--panel-2);
-  border: 2px solid var(--border);
-  box-shadow: 4px 4px 0 var(--shadow);
-  padding: 18px;
-  margin-top: 14px;
+  padding: 16px 18px;
+  margin-top: 16px;
 }
 
 .detail h3 {
   margin: 0 0 6px;
-  font-size: 1.1rem;
+  font-family: var(--font-dot);
   font-weight: normal;
+  font-size: 1.15rem;
   letter-spacing: 0.06em;
 }
 
@@ -531,22 +684,23 @@ ul.offspring .title {
 }
 
 .detail dt {
-  color: var(--muted);
-  font-size: 0.82rem;
+  font-family: var(--font-dot);
+  color: var(--text-dim);
+  font-size: 0.84rem;
   letter-spacing: 0.14em;
   margin-top: 14px;
-  border-top: 1px dashed var(--border);
+  border-top: 2px solid var(--inner);
   padding-top: 10px;
 }
 
 .detail dd {
   margin: 3px 0 0;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .detail ul {
   margin: 4px 0 0;
-  padding-left: 20px;
+  padding-left: 22px;
 }
 
 button.linkish {
@@ -556,22 +710,32 @@ button.linkish {
   padding: 0;
   color: var(--link);
   cursor: pointer;
-  font-family: var(--font-pixel);
+  font-family: var(--font-body);
   font-size: inherit;
-  text-decoration: underline dashed;
+  text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 button.linkish:hover {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .empty {
-  color: var(--muted);
-  font-size: 0.92rem;
+  color: var(--text-dim);
+  font-size: 0.93rem;
 }
 
-ul.offspring li.empty .title::before,
-ul.offspring li.empty::before {
-  content: none;
+/* --- モーション（状態変化のみ・常時動く装飾は作らない / §6） -------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero-top {
+    flex-direction: column;
+  }
 }

@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "validate-data": "node --experimental-strip-types scripts/validate-data.ts",
     "screenshot": "node scripts/screenshot.mjs",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "gitpush": "node scripts/gitpush.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
