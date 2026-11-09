@@ -226,15 +226,34 @@ async function checkAi(): Promise<void> {
       model: TEXT_MODEL,
       body: {
         messages: [{ role: 'user', content: '「OK」とだけ返してください。' }],
-        max_tokens: 20,
+        // gpt-oss は**推論モデル**: max_tokens は思考も含む予算。
+        // 20 では思考だけで枯渇し content=null / finish_reason=length になる（実測 2026-11）。
+        // 300 で本文が確実に返ることを確認済み。include_reasoning で思考を応答本文に混ぜない
+        // （reasoning_effort はこのエンドポイントで HTTP 400 = 不可、include_reasoning は受理）。
+        max_tokens: 300,
         temperature: 0,
+        include_reasoning: false,
       },
       retries: 0,
       timeoutMs: 30_000,
     });
     const text = extractChatText(result).trim();
     if (!text) {
-      fail('接続は成功しましたが、応答からテキストを取り出せません（応答形式は未検証。lib/cloudflare.ts の抽出候補を確認してください）');
+      // 切り分け情報を残す（値は出力しない。トークン・応答本文の秘匿性には影響しない範囲だけ）。
+      const obj = (result !== null && typeof result === 'object' ? result : {}) as Record<string, unknown>;
+      const choices = Array.isArray(obj.choices) ? obj.choices : [];
+      const c0 = (choices[0] !== null && typeof choices[0] === 'object' ? choices[0] : {}) as Record<
+        string,
+        unknown
+      >;
+      const finish = typeof c0.finish_reason === 'string' ? c0.finish_reason : '不明';
+      const usage = obj.usage !== undefined ? JSON.stringify(obj.usage) : 'なし';
+      fail(
+        `接続は成功しましたが本文を取得できません（finish_reason=${finish} / usage=${usage}）` +
+          (finish === 'length'
+            ? ' — max_tokens が不足しています（推論モデルの思考が予算を消費）。'
+            : ' — 応答形式は lib/cloudflare.ts の抽出候補を確認してください。'),
+      );
     }
     log(`✅ 接続OK: 応答「${text.slice(0, 40)}」（${text.length}文字）`);
     process.exit(0);

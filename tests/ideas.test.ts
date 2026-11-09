@@ -45,7 +45,9 @@ it('一覧は新しい順に件数どおり並び、世代・未実装バッジ�
   expect(items[0].querySelector('.badge.gen')?.textContent).toBe('第2世代');
   expect(items[0].querySelector('.badge.sample')?.textContent).toBe('SAMPLE');
   expect(host.textContent).toContain('全2件');
-  expect(host.textContent).toMatch(/生成: .*JST/);
+  // 日時は日本時間（issue #18）: 「誕生日時: 2026/11/08 20:05（日本時間）」
+  expect(host.textContent).toMatch(/誕生日時: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}（日本時間）/);
+  expect(host.textContent).not.toContain('UTC'); // UTCの生データは画面に出さない
   // 詳細リンクはトップの ?id= ディープリンク
   const detail = items[0].querySelector<HTMLAnchorElement>('a.idea-detail');
   expect(detail?.getAttribute('href')).toBe('/?id=mashup-000002');

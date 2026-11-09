@@ -6,8 +6,13 @@
  * - 認証: Authorization: Bearer {API_TOKEN}
  * - レスポンス envelope: { result, success, errors, messages }
  * - flux-1-schnell の画像は result.image に base64（data:image/jpeg;base64,... 形式の例が公式にあり）
- * - gpt-oss-20b の同期応答形式はドキュメントに無いため、観測されうる候補を列挙して吸収する
- *   （result.response / result.choices[0].message.content / result が文字列）＝**未検証**。
+ * - **gpt-oss-20b の同期応答は実接続で確認済み（2026-11 / npm run breed:check-ai）**:
+ *   OpenAI互換 `object: "chat.completion"`、本文は `choices[0].message.content`、
+ *   `usage` に prompt/completion/total_tokens と `neurons`（Workers AI の消費単位・**試算**）。
+ *   **推論モデル**のため `max_tokens` は思考込みの予算（不足で content=null / finish_reason=length、
+ *   思考は `message.reasoning_content`）。応答候補は他にも吸収しておく
+ *   （result.response / choices[0].text / result が文字列）。
+ * - **flux-1-schnell の応答形式（result.image の base64）は未検証**（check-ai はテキストのみ確認）。
  *
  * セキュリティ方針（追加開発指示 §9 / AGENTS.md）:
  * - APIトークンはサーバー側（GitHub Actions / ローカルCLI）専用。フロントからは呼ばない。
@@ -176,12 +181,20 @@ export async function cfAiRun(opts: CfRunOptions): Promise<unknown> {
 
 /**
  * チャット応答のテキスト部分を取り出す（gpt-oss-20b / issue #16 §2）。
- * 同期応答の正確な形式はドキュメントに無いため（**未検証**）観測されうる候補を吸収する:
+ *
+ * **実接続で確認済み（2026-11 / check-ai）**: 同期応答は OpenAI互換の
+ * `object: "chat.completion"` 形式で、本文は `choices[0].message.content`。
+ * あわせて以下も観測済み: `usage: { prompt_tokens, completion_tokens, total_tokens, neurons }`、
+ * **gpt-oss は推論モデル**で `max_tokens` は思考も含む予算（不足すると
+ * `content: null` + `finish_reason: "length"` になり、思考は `message.reasoning_content` に入る）。
+ *
+ * 候補（ドキュメントに形式の記載が無いため吸収する）:
  * 1. result.response（Workers AI テキスト生成の慣例）
- * 2. result.choices[0].message.content（OpenAI互換）
+ * 2. result.choices[0].message.content（OpenAI互換 ← 実測でこれ）
  * 3. result.choices[0].text
  * 4. result がそのまま文字列
  * 見つからなければ空文字（呼び出し側が失敗として扱う）。
+ * **`content` が null のとき reasoning_content を本文として拾わない**（思考≠本文）。
  */
 export function extractChatText(result: unknown): string {
   if (typeof result === 'string') return result;
@@ -191,6 +204,7 @@ export function extractChatText(result: unknown): string {
   if (Array.isArray(r.choices) && r.choices.length > 0) {
     const first = r.choices[0] as Record<string, unknown>;
     const msg = first?.message as Record<string, unknown> | undefined;
+    // content が null（= 予算不足等）なら空文字を返す。reasoning_content は本文ではない。
     if (msg && typeof msg.content === 'string') return msg.content;
     if (typeof first?.text === 'string') return first.text;
   }

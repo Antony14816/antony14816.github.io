@@ -6,6 +6,13 @@ import {
   BREEDING_MODES,
 } from '../lib/types.ts';
 import { MAX_COMMENT_LENGTH } from '../lib/issue.ts';
+import {
+  JST_NOTE,
+  formatDateTimeJST,
+  formatSlotDateTimeJST,
+  formatSlotRangeJST,
+  jstNote,
+} from '../lib/datetime.ts';
 import { newIssueUrl, repoConfigFromEnv } from '../lib/config.ts';
 import { CANDIDATES_PER_SLOT, isCandidatesFile, type CandidatesFile } from '../lib/candidates.ts';
 import {
@@ -192,7 +199,19 @@ themeBtn.addEventListener('click', () => {
 const heroLeft = el(
   'div',
   {},
-  el('div', { class: 'hero-title-row' }, logoSprite(), el('h1', {}, 'Mashup Ours')),
+  el(
+    'div',
+    { class: 'hero-title-row' },
+    logoSprite(),
+    // ロゴ右隣の読み仮名（issue #19）: Mashup Awards をもじった名前と伝わる小さめのカタカナ。
+    // 英語ロゴが主・カタカナは添え書き。h1 の中には入れない（見出しの文言は "Mashup Ours" のまま）。
+    el(
+      'div',
+      { class: 'hero-logo' },
+      el('h1', {}, 'Mashup Ours'),
+      el('span', { class: 'logo-yomi', lang: 'ja' }, '（マッシュアップアワーズ）'),
+    ),
+  ),
   el('p', { class: 'copy' }, '20年分の発明を、もう一度マッシュアップ。'),
 );
 
@@ -384,48 +403,39 @@ function slotToDate(slot: string): number {
   return Date.parse(`${m[1]}T${m[2]}:${m[3] ?? '00'}:00Z`);
 }
 
-/** slot（UTC）を "YYYY-MM-DDTHH:MM UTC" 表示にする。 */
-function fmtSlotUtc(slot: string): string {
-  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})?$/.exec(slot);
-  if (!m) return slot;
-  return `${m[1]}T${m[2]}:${m[3] ?? '00'} UTC`;
-}
-
-/** ms時刻を日本時間の表示にする（次の配合目安など、slot文字列でない時刻用 / issue #15）。 */
-function fmtJstMs(ms: number): string {
-  return new Intl.DateTimeFormat('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ms));
-}
-
-/** slot（UTC）を日本時間の表示に変換する。 */
-function fmtJst(slot: string): string {
-  const ms = slotToDate(slot);
-  if (Number.isNaN(ms)) return slot;
-  return fmtJstMs(ms);
-}
+// 日時の表示はすべて lib/datetime.ts の共通関数経由（issue #18 / JST統一）。
+// 内部キー（slot・ISO日時）はUTCのまま、画面に出すときだけ日本時間へ変換する。
+// slotToDate は「予定時刻を過ぎたか」の判定に使う **UTCの絶対時刻**（表示には使わない）。
 
 if (candidatesFile) {
   const f = candidatesFile;
+  // 表示は日本時間（issue #18）。値の根拠は UTCキー（f.slot / f.nextSlot）のまま変更しない。
+  // 不正値のときは「日時不明」となり、その場合だけ注記（日本時間）は付けない。
+  const slotTxt = formatSlotRangeJST(f.slot, scheduleCfg.candidateRotationMinutes);
+  const updatedTxt = formatDateTimeJST(f.generatedAt);
+  // nextSlot はスロットキー（UTC "YYYY-MM-DDTHHMM"）なので ISO としてではなくキーとして解釈する
+  const nextSlotTxt = formatSlotDateTimeJST(f.nextSlot);
   candMeta.append(
     el(
       'div',
       {},
-      '候補スロット: ',
-      el('span', { class: 'value' }, f.slot),
-      '（UTC。右上のバッジと同じ枠に切り替わります）',
+      '現在の配合枠: ',
+      el('span', { class: 'value' }, slotTxt),
+      `${jstNote(slotTxt)}。右上のバッジと同じ枠で切り替わります`,
     ),
-    el('div', {}, '候補生成: ', el('span', { class: 'value' }, f.generatedAt), '（Actionsの実行結果）'),
     el(
       'div',
       {},
-      '次回の候補更新予定: ',
-      el('span', { class: 'value' }, fmtSlotUtc(f.nextSlot)),
-      `（日本時間 ${fmtJst(f.nextSlot)} 頃・${intervalLabel(scheduleCfg.candidateRotationMinutes)}ごと更新）`,
+      '最終更新: ',
+      el('span', { class: 'value' }, updatedTxt),
+      `${jstNote(updatedTxt)}（Actionsの実行結果）`,
+    ),
+    el(
+      'div',
+      {},
+      '次の候補更新: ',
+      el('span', { class: 'value' }, nextSlotTxt),
+      `${jstNote(nextSlotTxt)}・更新予定（${intervalLabel(scheduleCfg.candidateRotationMinutes)}ごとに更新）`,
     ),
   );
   // Actionsの実行遅延はJSONの値（実行結果）ベースで表現する（端末時計で補完しない）。
@@ -607,7 +617,7 @@ const nextBreedingHint =
   lastBirthMs === 0
     ? 'まだ配合の成功記録がありません（最初の申請を順次受け付けています）。'
     : Date.now() < lastBirthMs + breedingIntervalMs
-      ? `次の配合の目安: 日本時間 ${fmtJstMs(lastBirthMs + breedingIntervalMs)} 頃（前回の誕生から間隔を空けて処理）。`
+      ? `次の配合の目安: ${formatDateTimeJST(lastBirthMs + breedingIntervalMs)}${JST_NOTE}（前回の誕生から間隔を空けて処理）。`
       : '次の配合はただちに処理できます（申請の順次処理）。';
 const statusNote = el(
   'div',
@@ -810,7 +820,9 @@ function refreshBreedButton(): void {
     hint.textContent = 'owner/repo未設定のため申し込めません（上の案内を参照）。';
   } else {
     hint.textContent = `${pair[0]} × ${pair[1]}${
-      candidatesFile ? `（候補スロット ${candidatesFile.slot}）` : ''
+      candidatesFile
+        ? `（現在の配合枠 ${formatSlotRangeJST(candidatesFile.slot, scheduleCfg.candidateRotationMinutes)}${JST_NOTE}）`
+        : ''
     } の組み合わせで配合を申し込みます。`;
   }
 }
@@ -1275,7 +1287,8 @@ function renderDetail(id: string): void {
         ),
       );
     }
-    add('生成日時', `${node.createdAt} ・ モデル: ${node.model}`);
+    const birthTxt = formatDateTimeJST(node.createdAt);
+    add('誕生日時', `${birthTxt}${jstNote(birthTxt)} ・ モデル: ${node.model}`);
   } else {
     add('世代', '第0世代（ProtoPedia作品）');
     if (node.authors && node.authors.length > 0) add('作者', node.authors.join(' / '));

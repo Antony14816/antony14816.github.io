@@ -110,7 +110,7 @@ describe('cfAiRun', () => {
   });
 });
 
-describe('extractChatText（gpt-oss-20b の応答形式は未検証 = 候補を吸収）', () => {
+describe('extractChatText（OpenAI互換形式は実接続で確認済み / 候補も吸収）', () => {
   it('result.response（Workers AI の慣例）を拾う', () => {
     expect(extractChatText({ response: 'あ' })).toBe('あ');
   });
@@ -127,6 +127,33 @@ describe('extractChatText（gpt-oss-20b の応答形式は未検証 = 候補を�
     expect(extractChatText({})).toBe('');
     expect(extractChatText(null)).toBe('');
     expect(extractChatText(42)).toBe('');
+  });
+  it('推論モデルで content=null のときは思考を本文として誤採用しない（実測形式）', () => {
+    // 実測 2026-11: max_tokens が思考で枯渇すると content=null / finish_reason=length
+    expect(
+      extractChatText({
+        object: 'chat.completion',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: null,
+              reasoning_content: 'The user says: 「OK」とだけ返してください…',
+            },
+            finish_reason: 'length',
+          },
+        ],
+        usage: { prompt_tokens: 76, completion_tokens: 20, total_tokens: 96, neurons: 1.927 },
+      }),
+    ).toBe('');
+    // include_reasoning=false のとき（本文だけが返る実形式）
+    expect(
+      extractChatText({
+        object: 'chat.completion',
+        choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }],
+      }),
+    ).toBe('OK');
   });
 });
 

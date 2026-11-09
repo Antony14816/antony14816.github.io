@@ -89,11 +89,17 @@ it('画像はlazy読込・alt付き。画像が無いカードはプレースホ
   expect(boxes).toBe(cards().length);
 });
 
-it('候補スロット・次回更新予定・全ユーザー共有の案内がある', async () => {
+it('配合枠・次の候補更新は日本時間で表示され、UTCの生データは出ない（issue #18）', async () => {
   await boot();
   const text = document.body.textContent ?? '';
-  expect(text).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}/); // スロット（UTC）
-  expect(text).toContain('次回の候補更新予定');
+  // 枠は日本時間の時間帯（例「15:00〜15:15」）。UTCスロットキーの生データは出さない
+  expect(text).toContain('現在の配合枠');
+  expect(text).toMatch(/現在の配合枠: \d{2}:\d{2}〜\d{2}:\d{2}（日本時間）/);
+  expect(text).toContain('次の候補更新');
+  expect(text).toMatch(/次の候補更新: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}（日本時間）/);
+  expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}/); // UTCスロットキーを露出しない
+  expect(text).not.toContain('UTC'); // 「次回更新（UTC）」等の表記は無効
+  expect(text).not.toContain('次回の候補更新予定'); // 旧文言
   expect(text).toContain('1時間に最大1件、全ユーザー共有');
   expect(text).toContain('ページを再読み込みしても候補は変わりません');
 });
@@ -410,6 +416,24 @@ it('系譜図の博士は完全な装飾（aria-hidden・二重読み上げし�
   expect(pedChar).toBeTruthy();
   expect(pedChar.getAttribute('aria-hidden')).toBe('true');
   expect(pedChar.hasAttribute('role')).toBe(false);
+});
+
+// --- ロゴの読み仮名（issue #19） -----------------------------------------------
+
+it('英語ロゴの右隣に小さく「（マッシュアップアワーズ）」の読み仮名がある', async () => {
+  await boot();
+  // 英語ロゴ（h1）は文言そのままで、読み仮名は別要素の添え書き
+  expect(document.querySelector('.hero h1')?.textContent).toBe('Mashup Ours');
+  const yomi = document.querySelector('.hero .logo-yomi');
+  expect(yomi?.textContent).toBe('（マッシュアップアワーズ）');
+  // h1 に読み仮名が混ざらない（見出しは英語のまま）
+  expect(document.querySelector('.hero h1')?.textContent).not.toContain('マッシュアップ');
+  // ロゴのスプライト（ドット絵）は維持
+  expect(document.querySelector('.hero-title-row .logo')).toBeTruthy();
+  // キャッチコピーは変更しない
+  expect(document.querySelector('.hero .copy')?.textContent).toBe(
+    '20年分の発明を、もう一度マッシュアップ。',
+  );
 });
 
 // --- 配合タイプ・研究員へのひとこと・サムネイル（issue #16） -------------------

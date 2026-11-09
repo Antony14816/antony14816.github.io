@@ -245,6 +245,28 @@ header.hero h1 {
   color: var(--text);
 }
 
+/* ロゴの読み仮名（issue #19）: Mashup Awards をもじった名前と伝わるよう、
+   英語ロゴの右隣に小さくカタカナを添える。英語が主・カタカナは淡い添え書き。
+   日本語は可読性優先でドットフォントではなく本文フォント（Noto Sans JP）を使う。 */
+.hero-logo {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 0.5em;
+  row-gap: 2px;
+  min-width: 0;
+}
+
+.logo-yomi {
+  font-family: var(--font-body);
+  font-weight: 400;
+  /* h1（clamp 1.6〜2.6rem）より明確に小さく、英語より目立たない */
+  font-size: clamp(0.72rem, 1.6vw, 0.95rem);
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 /* コピーはアクセント色 + 太字19px = WCAG「大きな文字(14pt bold)」の3:1経路で合格 */
 header.hero .copy {
   color: var(--series-2);
@@ -1023,6 +1045,13 @@ button.linkish:hover {
 @media (max-width: 760px) {
   .hero-top {
     flex-direction: column;
+  }
+
+  /* 狭い画面では読み仮名をロゴの下に小さく（横にはみ出さない） */
+  .hero-logo {
+    flex-direction: column;
+    align-items: flex-start;
+    row-gap: 0;
   }
 }
 

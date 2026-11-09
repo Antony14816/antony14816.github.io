@@ -88,6 +88,16 @@ npm run dev            # http://localhost:5173
 - 既存の `data/offspring.json`・Issue申請・`current-candidates.json` は変更不要（設定変更との互換性を維持）。
 - ローカル開発で枠内に再生成したいときだけ `npm run rotate:candidates -- --force`（ワークフローからは渡さない）。
 
+## 日時表示（JST統一 / issue #18）
+
+**サイトに表示する日時はすべて日本時間（`Asia/Tokyo`）**。内部データと処理はUTCのまま（下記）。
+
+- **表示**: `lib/datetime.ts` の共通関数だけを通す。日付 `2026/11/10` / 日時 `2026/11/10 15:00` / 時刻 `15:00` / 時間帯 `15:00〜15:15`（日跨ぎは `2026/11/09 23:30〜2026/11/10 00:30`）。24時間表記・秒なし・`Intl.DateTimeFormat` に `timeZone: 'Asia/Tokyo'` を明示するため**ブラウザ/OSのタイムゾーン設定に依存しない**。文言は「現在の配合枠」「最終更新」「次の候補更新」「誕生日時」で、値の後ろに「（日本時間）」を添える。
+- **不正・欠損の日時**は例外ではなく **`日時不明`** を表示する（そのときだけ「（日本時間）」は付けない）。
+- **内部はUTC**: JSONの `createdAt` / `generatedAt` / スロットキー（`YYYY-MM-DDTHHMM`）はISO 8601（UTC）のまま、Actionsのcron・間隔判定・スロット境界もUTCの絶対時刻。**JST文字列を再解析して判定することはしない**（比較・判定は `lib/schedule.ts` / `lib/candidates.ts`、`lib/datetime.ts` は表示専用）。既存JSONの書換も不要。
+- **予定時刻は保証しない**: 「次の候補更新」はActionsの実行結果（JSONの値）から導いた**更新予定**で、遅延時は `⚠ 候補更新が遅れています` が出る（端末時計で補完しない）。カウントダウン表示は無い。
+- 配合の実行制限は従来どおり**前回成功からの経過時間（elapsed方式）**で、表示時間帯（固定枠の境界）とは独立した設定（`breedingIntervalMinutes`）。
+
 ## ProtoPedia作品の取得と候補ローテ（API v2）
 
 仕様は `docs/protopediaapi.md`（調査資料。**実接続で一部確認済み**、下「検証済みと未検証」参照）。実装は `lib/protopedia.ts` + `scripts/fetch-sample-prototypes.mjs` + `scripts/rotate-candidates.ts`。
@@ -167,7 +177,7 @@ open Issue の最古1件（ラベル非信用・タイトル/本文で判定）
   画像タイルは下地 `--tile`（白系・両テーマ共通）で `object-fit: contain`・`loading=lazy`・読込失敗時は「画像なし」プレースホルダ（枠は維持）。
   見出しは DotGothic16 + ラテン小見出し、枠・色は研究所トークンのまま — **一般的なSaaSカードUIにしない**。
   選択状態は「タイル枠の色 + バッジ文字（親A選択中）+ 押下ボタン」の三重化で色だけに依存しない。
-- **一覧ページ `/ideas`**: Viteマルチページ（`public/ideas/index.html` + `public/ideas.ts`）。`data/offspring.json` のみを新しい順に列挙し、各項目に 未実装バッジ・世代・親リンク（子作品=トップの `?id=` ディープリンク / ProtoPedia=出典URL）・生成日時（JST）・元Issue（あれば）を表示。0件なら空状態で申請誘導。トップの「最近誕生した発明」見出しからリンクする。
+- **一覧ページ `/ideas`**: Viteマルチページ（`public/ideas/index.html` + `public/ideas.ts`）。`data/offspring.json` のみを新しい順に列挙し、各項目に 未実装バッジ・世代・親リンク（子作品=トップの `?id=` ディープリンク / ProtoPedia=出典URL）・誕生日時（日本時間）・元Issue（あれば）を表示。0件なら空状態で申請誘導。トップの「最近誕生した発明」見出しからリンクする。
 - **系譜図の配色は dataviz 手順で検証済み（両テーマ・ノード面でPASS）**:
   | テーマ | 面 | 元作品（実線） | 子作品（破線） |
   |---|---|---|---|
@@ -182,6 +192,11 @@ open Issue の最古1件（ラベル非信用・タイトル/本文で判定）
   - **リアクションは実際の処理状態と連動**: Issue作成画面を開いただけでは `success` にしない（「送信」まで未完了と表示）。申請完了は匿名GitHub APIがIssueを確認したときだけ。**実験待ち（open Issue）と生成中（closed 未公開）を区別**し、誕生（`celebration`）は公開済みの本番子作品でだけ判定する。
   - 状態観測はブラウザから匿名 `api.github.com`（CORS可・60req/h/IP）を **3分間隔（最大40req/h）** でポーリング。3回連続失敗・レート制限・誕生確認で停止し、無限リトライしない（`public/github-watch.ts`）。
   - ランタイムの誕生検知用にビルド時と同様の `data/offspring.json` を `dist/` へ emit（取得失敗時はビルド時データにフォールバック）。
+- **ロゴの読み仮名（issue #19）**: FVの英語ロゴ「Mashup Ours」の右隣に小さく **「（マッシュアップアワーズ）」** を添える（Mashup Awardsをもじった名前と伝わる添え書き）。
+  - 英語ロゴ（`.hero h1`）は文言・ドット絵スプライトとも変更せず、読み仮名は `.logo-yomi`（h1とは別要素）。
+  - カタカナは英語より**目立たない**: h1（`clamp(1.6rem〜2.6rem)` DotGothic16）に対し `clamp(0.72rem〜0.95rem)`・`--text-dim`・本文フォント **Noto Sans JP（日本語の可読性優先でドットフォントにしない）**。
+  - **760px以下はロゴの下に配置**（`.hero-logo` を縦積み）。デスクトップ/モバイルとも横スクロール0pxを実測。
+  - キャッチコピー「20年分の発明を、もう一度マッシュアップ。」は変更なし。
 - **スクリーンショット確認**: `npm run build && npx vite preview --port 4173` を起動してから `npm run screenshot`（**ライト/ダーク両テーマ** × デスクトップ/詳細/モバイルを `tmp/` に出力。初回のみ `npx playwright install chromium` と `install-deps` が必要）。
 
 ## ID名前空間の決定事項
@@ -196,6 +211,13 @@ open Issue の最古1件（ラベル非信用・タイトル/本文で判定）
 **実接続で確認済み（2026-11・実トークンでの取得）**:
 - `/prototype/list` のレスポンス形状は `{metadata, count, links, results}`。**`count` はページ内件数**（総数ではない）。
 - カタログ件数外の offset は HTTP 200 + `count:0` で `results` キー自体が無い（= 空ページとして正常終了）。
+
+**実接続で確認済み（2026-11・`npm run breed:check-ai` / Cloudflare Workers AI）**:
+- 認証・エンドポイントは有効。テキスト生成 `@cf/openai/gpt-oss-20b` の同期応答は **OpenAI互換**（`object: "chat.completion"`）で本文は `choices[0].message.content`。
+- **`usage` フィールドは存在する**: `prompt_tokens` / `completion_tokens` / `total_tokens` / `neurons`（Workers AI の消費単位。**neuronsは試算値**という方針は維持）。
+- **gpt-oss は推論モデル**: `max_tokens` は**思考も含む予算**。不足すると `content: null` + `finish_reason: "length"`（思考は `message.reasoning_content`）→ 抽出は空文字になり**呼び出し側の検証・失敗処理に落ちる**（データは壊れない）。check-ai は `max_tokens: 300` + `include_reasoning: false` で本文取得を確認。
+- `include_reasoning: false` は受理される。**`reasoning_effort` は HTTP 400 で不可**（このエンドポイント）。
+- トークン実測例: prompt 76 / completion 40（思考込み）で `content="OK"`。
 - `users` / `tags` は `|`-区切りの**文字列**。作者は `表示名@handle` 形式（例 `ひさやん@hisayan`。そのまま保存 = クレジット用）。
 - `licenseType: 1` → 作品ページ表示「CC BY 4+」（id=1 のページと照合済み）。取得時はライセンスのある作品だけ保存。
 - 作品ページURLは `https://protopedia.net/prototype/<id>`。カタログ総数は 5,100件超（正確な総数は未測定）。
@@ -205,10 +227,9 @@ open Issue の最古1件（ラベル非信用・タイトル/本文で判定）
 - [ ] `deploy.yml` / `sync-prototypes.yml` / `rotate-candidates.yml` の実動作 — push後のActions実行結果で確認（ローカルではYAML構文・スクリプト単体・決定的選出テストのみ確認）。
 - [ ] `releaseFlg` のenum値の意味（観測値は常に 2。欠損=公開扱いの暫定実装）。
 - [ ] ProtoPedia APIのレート制限・1レスポンスの件数上限（ページ間隔100msで暫定対応）。
-- [ ] **Cloudflare Workers AI の実接続**（Secrets登録後 `npm run breed:check-ai` で確認）。現状は**未接続＝未検証**。
-  - [ ] `@cf/openai/gpt-oss-20b` の同期応答形式（`result.response` / `choices[0]` を実装側で吸収中）。
-  - [ ] Workers AI の usage（トークン数）フィールドの有無 — 公式ドキュメントに記載なし。無ければ回数のみ実測・Neurons試算は0。
-  - [ ] `flux-1-schnell` の応答（`result.image` の形式・width/height非指定時の挙動）。
+- [ ] **Cloudflare Workers AI の本番生成**（テキスト接続は確認済み＝上記。以下は未検証）。
+  - [ ] `flux-1-schnell` の応答（`result.image` の形式・width/height非指定時の挙動）— check-ai はテキストのみ確認。
+  - [ ] **本番の抽出（1200）・生成（2500トークン）での推論トークン消費** — 思考込みの予算のため、長文思考で `finish_reason=length` になる可能性。起きれば検証失敗→再試行→失敗処理に落ちる（安全側）。
   - [ ] 無料枠・料金・レート制限の現行条件（**「1時間に1回なら無料枠内」とは断定しない**）。
 - [ ] `breed.yml` の cron 実動作（15分起床・間隔判定・Issueコメント/クローズまで）。ローカルは `npm run breed:dry` と単体テストのみ。
 - [ ] `data/offspring.json` へのコミットとブランチ保護の兼ね合い — Actions実装時に確認、必要ならPR方式へ。

@@ -2,6 +2,7 @@ import './style.css';
 import type { Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
 import { BLEND_MODE_LABELS } from '../lib/types.ts';
 import { repoConfigFromEnv } from '../lib/config.ts';
+import { formatDateTimeJSTWithNote } from '../lib/datetime.ts';
 import { CANDIDATES_PER_SLOT, isCandidatesFile } from '../lib/candidates.ts';
 import { intervalLabel, resolveSchedule } from '../lib/schedule.ts';
 import rawOffspring from '../data/offspring.json';
@@ -59,20 +60,8 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-/** ISO日時を日本時間表示に（JST明記でタイムゾーンの誤解を防ぐ）。 */
-function fmtDate(iso: string): string {
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return iso;
-  const s = new Intl.DateTimeFormat('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ms));
-  return `${s} JST`;
-}
+// 日時は lib/datetime.ts の共通関数で日本時間表示（issue #18 / JST統一）。
+// 内部データ（createdAt）はUTCのまま、表示時のみ変換。不正値は「日時不明」。
 
 export interface IdeasContext {
   /** Issueリンク用。未設定なら元Issueのリンクは出さない（トップと同じ）。 */
@@ -125,7 +114,7 @@ function buildIdeaItem(
   const meta = el(
     'div',
     { class: 'idea-meta hint' },
-    `${c.id} ・ 生成: ${fmtDate(c.createdAt)}`,
+    `${c.id} ・ 誕生日時: ${formatDateTimeJSTWithNote(c.createdAt)}`,
   );
 
   const foot = el('div', { class: 'idea-foot' });
