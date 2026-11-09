@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
+import type { Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 // GitHub Pages のプロジェクトサイトとして公開するため base をリポジトリ名に合わせる。
 // repo 名はハードコードせず、優先順位で決める:
@@ -15,10 +17,39 @@ const basePath = process.env.VITE_BASE ?? (ghrRepo ? `/${ghrRepo}/` : '/');
 // （VITEST は設定読み込み前に立つ。define のダミー注入と同じ既存パターン）。
 const isVitest = !!process.env.VITEST;
 
+const dataDirUrl = new URL('./data/', import.meta.url);
+
+// ランタイム観測用: トップの main.ts が data/offspring.json をフェッチして
+// 「ビルド後に生まれた誕生」を検知できるようにする（public/ 外のため emit が必要。
+// dev サーバーでは同一パスへミドルウェアで返す。読み込み失敗時はフロントが
+// ビルド時データへフォールバックする）。
+const runtimeDataPlugin: Plugin = {
+  name: 'emit-runtime-data',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'data/offspring.json',
+      source: readFileSync(new URL('offspring.json', dataDirUrl), 'utf8'),
+    });
+  },
+  configureServer(server) {
+    server.middlewares.use('/data/offspring.json', (_req, res, next) => {
+      try {
+        const body = readFileSync(new URL('offspring.json', dataDirUrl), 'utf8');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(body);
+      } catch {
+        next();
+      }
+    });
+  },
+};
+
 export default defineConfig({
   root: isVitest ? undefined : fileURLToPath(new URL('./public', import.meta.url)),
   publicDir: fileURLToPath(new URL('./public/static', import.meta.url)),
   base: basePath,
+  plugins: [runtimeDataPlugin],
   // Actions の GITHUB_REPOSITORY をクライアントコードへ注入する（リポジトリ名のハードコード禁止）。
   // テスト時のみダミー値を注入し、Issueリンク生成のUI挙動を検証できるようにする。
   define: {

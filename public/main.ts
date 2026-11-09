@@ -7,6 +7,17 @@ import rawOffspring from '../data/offspring.json';
 import rawCandidates from '../data/current-candidates.json';
 import sampleWorksJson from '../data/protopedia-sample.json';
 import rawSampleOffspring from '../data/offspring.sample.json';
+import { createCharacter } from './character.ts';
+import {
+  applyView,
+  observeBreeding,
+  observeView,
+  OBSERVE_INTERVAL_MS,
+  OBSERVE_MAX_CYCLES,
+  type ApplyPhase,
+  type ObservePhase,
+} from './breeding-state.ts';
+import { fetchSeenIssues, watchApplyConfirmation } from './github-watch.ts';
 
 // ---------------------------------------------------------------------------
 // データ読み込み
@@ -161,6 +172,27 @@ wrap.append(
 );
 updateThemeBtn();
 
+// --- 博士キャラクター（issue #11 追加指示 §5: トップ=2人そろって挨拶） ------
+// キャラの状態は breeding-state.ts の観測結果だけが変える（操作と連動）。
+
+const bannoGreet = createCharacter('banno');
+const higeGreet = createCharacter('higedaruma');
+const greetLead = el('p', { class: 'greet-lead' }, observeView('nothing').greeting);
+const greetBody = el(
+  'p',
+  {},
+  '案内は 伴野博士（左）と ひげだるま博士（右）。GitHubアカウントがあれば誰でも申請できます（閲覧は不要）。生成結果はすべてAIが考えた未実装のアイデアです。',
+);
+wrap.append(
+  el(
+    'div',
+    { class: 'char-greet window' },
+    bannoGreet.el,
+    higeGreet.el,
+    el('div', { class: 'greet-text' }, greetLead, greetBody),
+  ),
+);
+
 // --- 所長のメモ（セリフウィンドウ。キャラ画はMVP後に追加 / DESIGN.md §4） ---
 
 wrap.append(
@@ -226,6 +258,16 @@ const candSection = el('section', { class: 'cand-section' });
 const stateBadge = el('span', { class: 'chip' });
 const candMeta = el('div', { class: 'cand-meta' });
 const grid = el('div', { class: 'candidates' });
+
+// --- 親選択の案内（追加指示 §5: 親選択=伴野博士） --------------------------
+// 状態は「選択数」だけを反映する。success/thinking は実際の処理状態のときに
+// だけ使う（ここでは触らない）。
+const SELECT_MSGS: Record<number, string> = {
+  0: '候補から2つえらんでね。「Aにする」「Bにする」のボタンで選べます。',
+  1: 'あと1つ！もう1つえらべば交配を申請できます。',
+  2: '2つえらべました。下の「交配を申請」を押してね。',
+};
+const bannoGuide = createCharacter('banno', { message: SELECT_MSGS[0] });
 
 /** slot "YYYY-MM-DDTHH"（UTC）を日本時間の表示に変換する。 */
 function fmtJst(slot: string): string {
@@ -401,6 +443,7 @@ candSection.append(
     ),
     candMeta,
     grid,
+    el('div', { class: 'cand-guide' }, bannoGuide.el),
   ),
 );
 wrap.append(candSection);
@@ -465,6 +508,19 @@ const machineHint = el(
     : '候補カードの「Aにする」「Bにする」で2つ選んで申請できます。',
 );
 
+// --- 交配マシンの博士（追加指示 §5: 交配申請=ひげだるま博士） --------------
+// どの状態を出すかは applyView（申請フロー）/ observeView（公開データ観測）が決める。
+const higeMachine = createCharacter('higedaruma', { message: applyView('idle').message });
+
+let applyPhase: ApplyPhase = 'idle';
+
+function setApplyPhase(phase: ApplyPhase): void {
+  applyPhase = phase;
+  const v = applyView(phase);
+  higeMachine.setState(v.state);
+  higeMachine.setMessage(v.message);
+}
+
 const machine = el(
   'div',
   { class: 'machine window' },
@@ -484,6 +540,7 @@ const machine = el(
   statusRow,
   statusNote,
   actions,
+  el('div', { class: 'machine-char' }, higeMachine.el),
 );
 machineSection.append(machine);
 wrap.append(machineSection);
@@ -533,7 +590,91 @@ function updateSelectionUI(): void {
   statusA.classList.toggle('empty', !pickA);
   statusB.textContent = pickText(pickB);
   statusB.classList.toggle('empty', !pickB);
+  const selected = (pickA ? 1 : 0) + (pickB ? 1 : 0);
+  bannoGuide.setMessage(SELECT_MSGS[selected]);
   refreshBreedButton();
+}
+
+// ライブ観測のガード（追加指示 §10 / 最重要事項）:
+// - テスト（vitest）では一切の実通信をしない（ui.test が main.ts を起動し続ける）。
+// - owner/repo 未設定でも観測はしない。
+// - 3回連続失敗・レート制限で観測を止める（無限リトライしない）。
+const canWatch =
+  import.meta.env.MODE !== 'test' && typeof fetch === 'function' && repoCfg !== null;
+
+let cancelApplyWatch: (() => void) | null = null;
+let observeTimer: ReturnType<typeof setInterval> | undefined;
+let observeFailures = 0;
+let observeCycles = 0;
+
+/** 公開データ（Issue + 子作品）から実際の処理状態を観測してキャラに反映する。 */
+async function refreshObservation(): Promise<void> {
+  if (!repoCfg) return;
+  try {
+    const [issues, runtimeOffspring] = await Promise.all([
+      fetchSeenIssues(repoCfg),
+      fetchRuntimeOffspring(),
+    ]);
+    observeFailures = 0;
+    applyObservation(
+      observeBreeding({ issues, offspring: runtimeOffspring, nowMs: Date.now() }),
+    );
+    if (observedPhase === 'fresh') stopObservation(); // 誕生演出のあとは停止
+  } catch {
+    observeFailures += 1;
+    if (observeFailures >= 3) stopObservation(); // 表示は現状のまま維持する
+  }
+}
+
+function stopObservation(): void {
+  if (observeTimer !== undefined) {
+    clearInterval(observeTimer);
+    observeTimer = undefined;
+  }
+}
+
+let observedPhase: ObservePhase = 'nothing';
+
+/** 観測結果をキャラ・挨拶文へ反映する（申請フロー中は申請の真実が優先）。 */
+function applyObservation(phase: ObservePhase): void {
+  observedPhase = phase;
+  const view = observeView(phase);
+  if (applyPhase === 'idle') {
+    higeMachine.setState(view.higedaruma.state);
+    higeMachine.setMessage(view.higedaruma.message);
+  }
+  bannoGreet.setState(view.bothState);
+  higeGreet.setState(view.bothState);
+  greetLead.textContent = view.greeting;
+}
+
+/**
+ * ランタイムの子作品（ビルド後に生まれた誕生を知るため data/offspring.json を読む。
+ * vite.config.ts の emit プラグインが dist へ出す）。失敗時はビルド時データのまま。
+ * 不正な項目は取り込まない（JSONは外部入力。表示には本文を流し込まない）。
+ */
+async function fetchRuntimeOffspring(): Promise<Offspring[]> {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}data/offspring.json`);
+    if (!res.ok) return offspring;
+    const data: unknown = await res.json();
+    if (!Array.isArray(data)) return offspring;
+    const out: Offspring[] = [];
+    for (const item of data as Offspring[]) {
+      if (
+        item &&
+        typeof item.id === 'string' &&
+        typeof item.createdAt === 'string' &&
+        typeof item.sourceIssue === 'number' &&
+        !item.sample
+      ) {
+        out.push(item);
+      }
+    }
+    return out;
+  } catch {
+    return offspring;
+  }
 }
 
 breedBtn.addEventListener('click', () => {
@@ -550,6 +691,18 @@ breedBtn.addEventListener('click', () => {
     '_blank',
     'noopener',
   );
+  // 最重要事項: 画面を開いただけでは申請完了ではない → success にしない。
+  // GitHub API が Issue を確認できたときだけ confirmed（success 表示）になる。
+  setApplyPhase('opening');
+  if (canWatch) {
+    cancelApplyWatch?.();
+    cancelApplyWatch = watchApplyConfirmation(
+      repoCfg,
+      { parentA: pair[0], parentB: pair[1] },
+      Date.now(),
+      (result) => setApplyPhase(result),
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -606,12 +759,16 @@ wrap.append(listSection);
 
 const pedSection = el('section', {}, el('h2', {}, '家系図'));
 // 色だけに依存させない: 凡例 + 破線/実線の形アクセントで区別する
+// 追加指示 §5: 家系図はキャラの補助表示（完全装飾 = aria-hidden。character.ts が付与）
+const pedChar = createCharacter('banno', { decorative: true });
+pedChar.el.classList.add('ped-char');
 const legend = el(
   'div',
   { class: 'pedigree-legend' },
   el('span', { class: 'key' }, el('span', { class: 'swatch proto' }), 'ProtoPediaの元作品（実線・第0世代）'),
   el('span', { class: 'key' }, el('span', { class: 'swatch child' }), 'AIが生んだ子作品（破線・未実装アイデア）'),
   el('span', { class: 'scroll-hint' }, '横スクロールで系譜をたどれます'),
+  pedChar.el,
 );
 const pedScroll = el('div', { class: 'pedigree-scroll window' });
 const detailBox = el('div', { class: 'detail window' }, el('p', { class: 'empty' }, 'ノードをクリックすると詳細を表示します。'));
@@ -829,6 +986,21 @@ function selectNode(id: string): void {
 
 renderPedigree();
 updateSelectionUI();
+
+// --- 公開状態の観測開始（issue #10〜 §10: 実際の処理状態とキャラを連動） -----
+// 匿名API 60req/h のため OBSERVE_INTERVAL_MS（3分、最大40req/h）。
+// テスト環境・未設定時は実通信しない。3回連続失敗 / fresh / 上限回数で停止。
+if (canWatch && repoCfg) {
+  void refreshObservation();
+  observeTimer = setInterval(() => {
+    observeCycles += 1;
+    if (observeCycles >= OBSERVE_MAX_CYCLES) {
+      stopObservation();
+      return;
+    }
+    void refreshObservation();
+  }, OBSERVE_INTERVAL_MS);
+}
 
 // ?id= ディープリンク（/ideas の「家系図で詳細を見る」から戻る用 / issue #8）。
 // 無効・未知のIDは無視して初期表示のまま。

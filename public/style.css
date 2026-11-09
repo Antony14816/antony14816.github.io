@@ -1152,3 +1152,189 @@ li.idea-item {
   margin-top: 28px;
   font-size: 0.85rem;
 }
+
+/* --- 博士キャラクター（issue #11 追加指示 §5〜§8） ------------------------- */
+
+.char {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  min-width: 0;
+}
+
+.char-img {
+  /* ドット絵を補間しない（pixelated。旧UA向けに crisp-edges を先に置く）。
+     既定サイズは実像素135x268を超えない。 */
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  object-fit: contain;
+  width: clamp(96px, 22vw, 135px);
+  height: auto;
+  aspect-ratio: 135 / 268;
+  flex: none;
+  user-select: none;
+  animation-duration: 1.6s;
+  animation-iteration-count: infinite;
+  animation-timing-function: steps(2, end);
+  animation-name: char-idle;
+}
+
+/* 状態ごとの動き（§6: 各状態の動き。reduced-motion は全体ルールで全停止） */
+.char[data-state='thinking'] .char-img {
+  animation-name: char-think;
+  animation-duration: 0.7s;
+}
+
+.char[data-state='success'] .char-img {
+  animation-name: char-pop;
+  animation-duration: 0.6s;
+  animation-iteration-count: 1;
+  animation-timing-function: steps(4, end);
+}
+
+.char[data-state='celebration'] .char-img {
+  animation-name: char-jump;
+  animation-duration: 0.9s;
+  animation-iteration-count: 3; /* 短い演出にしてから静止する */
+  animation-timing-function: steps(3, end);
+}
+
+@keyframes char-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes char-think {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes char-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes char-jump {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  33% {
+    transform: translateY(-10px);
+  }
+  66% {
+    transform: translateY(0);
+  }
+}
+
+/* セリフウィンドウ（キャラは img のみ・文言は別要素 → 二重読み上げしない） */
+.char-msg {
+  margin: 0;
+  padding: 9px 13px;
+  background: var(--window);
+  border: 3px solid var(--line);
+  box-shadow:
+    inset 0 0 0 2px var(--inner),
+    4px 4px 0 var(--shadow);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text);
+  max-width: 34em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.char-msg[hidden] {
+  display: none;
+}
+
+/* トップの挨拶（2人） */
+.char-greet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 26px;
+  padding: 16px 18px;
+}
+
+.char-greet .greet-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.greet-text p {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.greet-text p:last-child {
+  margin-bottom: 0;
+}
+
+.greet-text .greet-lead {
+  font-family: var(--font-dot);
+  font-size: 1.02rem;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+/* 親選択パネルの案内（伴野博士） */
+.cand-guide {
+  margin-top: 16px;
+}
+
+/* 交配マシン内（ひげだるま博士） */
+.machine-char {
+  margin-top: 16px;
+}
+
+/* 家系図の補助表示（完全な装飾: aria-hidden は character.ts が付与） */
+.ped-char {
+  margin-left: auto;
+}
+
+.ped-char .char-img {
+  width: clamp(72px, 10vw, 96px);
+}
+
+@media (max-width: 760px) {
+  .char {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .char-img {
+    width: clamp(96px, 30vw, 135px);
+  }
+
+  .char-msg {
+    max-width: none;
+    flex: 1 1 200px;
+  }
+
+  .char-greet {
+    padding: 14px;
+  }
+
+  .ped-char {
+    margin-left: 0;
+  }
+}

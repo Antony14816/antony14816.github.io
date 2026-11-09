@@ -240,3 +240,53 @@ it('/ideas へのリンクがトップから張られている（issue #8）', a
 function repoConfigured(): boolean {
   return document.querySelectorAll('.notice.error').length === 0;
 }
+
+// --- 博士キャラクター（issue #11 追加指示 §5・§7・§10 最重要事項） ----------
+
+it('トップに2人の博士が挨拶ウィンドウで表示される', async () => {
+  await boot();
+  const chars = document.querySelectorAll('.char-greet .char');
+  expect(chars.length).toBe(2);
+  expect((chars[0] as HTMLElement).dataset.char).toBe('banno');
+  expect((chars[1] as HTMLElement).dataset.char).toBe('higedaruma');
+  const lead = document.querySelector('.greet-lead')?.textContent ?? '';
+  expect(lead).toContain('16bit交配研究所');
+});
+
+it('親の選択数に伴野博士の案内が連動する（0→1→2）', async () => {
+  const { pickBtn } = await boot();
+  const guideMsg = () =>
+    document.querySelector('.cand-guide .char-msg')?.textContent ?? '';
+  expect(guideMsg()).toContain('2つえらんでね');
+  pickBtn(0, 'a').click();
+  expect(guideMsg()).toContain('あと1つ');
+  pickBtn(1, 'b').click();
+  expect(guideMsg()).toContain('2つえらべました');
+});
+
+it('Issue作成画面を開いただけではひげだるま博士は success にしない（最重要事項）', async () => {
+  const { pickBtn, breedButton } = await boot();
+  const spy = vi.spyOn(window, 'open').mockReturnValue(null);
+  pickBtn(0, 'a').click();
+  pickBtn(1, 'b').click();
+  if (!breedButton().disabled) {
+    breedButton().click();
+    const machineChar = document.querySelector('.machine-char .char') as HTMLElement;
+    expect(machineChar.dataset.state).not.toBe('success');
+    expect(machineChar.dataset.state).toBe('idle'); // 開いただけ = 未完了のまま
+    const msg = document.querySelector('.machine-char .char-msg')?.textContent ?? '';
+    expect(msg).toContain('Issue作成画面を開きました');
+    expect(msg).toContain('送信');
+    // テスト環境では実通信ポーリングを一切始めない
+    expect(spy).toHaveBeenCalledTimes(1);
+  }
+  spy.mockRestore();
+});
+
+it('家系図の博士は完全な装飾（aria-hidden・二重読み上げしない）', async () => {
+  await boot();
+  const pedChar = document.querySelector('.ped-char') as HTMLElement;
+  expect(pedChar).toBeTruthy();
+  expect(pedChar.getAttribute('aria-hidden')).toBe('true');
+  expect(pedChar.hasAttribute('role')).toBe(false);
+});

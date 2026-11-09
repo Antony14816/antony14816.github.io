@@ -120,7 +120,12 @@ slot: 2026-11-09T12                                 ← 申請時の候補スロ
 
   CVD分離は ΔE 7〜8 のWARN帯のため、**凡例 + 線種（実線/破線）+ ノードラベルで二重化**して合法化している。勝手に色を替えない。
 - **コントラスト**: 本文はAA（4.5:1以上）をトークンで確保。アクセント色の強調語は `--accent-ink`（通常サイズでAA）、タグラインは太字19pxの「大きな文字」経路（3:1以上）を使う。装飾は `aria-hidden`、状態は色のみで区別しない（ラベル・線種・マーク併用）。
-- **装飾**: 浮遊スプライト・点滅・グリッド背景は不使用（DESIGN.md §3.1/§6）。所長のメモは文字だけのセリフウィンドウ（キャラ画はMVP後の制作タスク）。
+- **装飾**: 浮遊スプライト・常時点滅・グリッド背景は不使用（DESIGN.md §3.1/§6）。所長のメモは文字だけのセリフウィンドウ。**博士キャラクターは状態表現としてのみ動き、`prefers-reduced-motion` で全停止する。**
+- **博士キャラクター（issue #11）**: 伴野博士（案内・親選択）と ひげだるま博士（交配実験・結果発表）を8bitスプライトで表示（`public/assets/characters/` に個別透過PNG 8枚・共通135×268・足元揃え、切り出しは `scripts/slice-characters.mjs`）。
+  - 状態は `idle / success / thinking / celebration` の4種（`public/character.ts` が表示、`public/breeding-state.ts` が実際の状態から決定）。
+  - **リアクションは実際の処理状態と連動**: Issue作成画面を開いただけでは `success` にしない（「送信」まで未完了と表示）。申請完了は匿名GitHub APIがIssueを確認したときだけ。**実験待ち（open Issue）と生成中（closed 未公開）を区別**し、誕生（`celebration`）は公開済みの本番子作品でだけ判定する。
+  - 状態観測はブラウザから匿名 `api.github.com`（CORS可・60req/h/IP）を **3分間隔（最大40req/h）** でポーリング。3回連続失敗・レート制限・誕生確認で停止し、無限リトライしない（`public/github-watch.ts`）。
+  - ランタイムの誕生検知用にビルド時と同様の `data/offspring.json` を `dist/` へ emit（取得失敗時はビルド時データにフォールバック）。
 - **スクリーンショット確認**: `npm run build && npx vite preview --port 4173` を起動してから `npm run screenshot`（**ライト/ダーク両テーマ** × デスクトップ/詳細/モバイルを `tmp/` に出力。初回のみ `npx playwright install chromium` と `install-deps` が必要）。
 
 ## ID名前空間の決定事項
@@ -147,6 +152,8 @@ slot: 2026-11-09T12                                 ← 申請時の候補スロ
 - [ ] 生成AIプロバイダーの選定（料金・無料枠・構造化出力）。`AI_API_KEY` 未設定時はドライラン。
 - [ ] `data/offspring.json` へのコミットとブランチ保護の兼ね合い — Actions実装時に確認、必要ならPR方式へ。
 - [ ] GitHub Pages 本番での `/ideas` 配信 — ローカル preview では `/`・`/ideas/`・`/ideas` すべて200を確認。Pagesの `/ideas` → `/ideas/` リダイレクト挙動は未検証（自前リンクは末尾 `/` つきなので影響なし）。
+- [ ] ブラウザからの匿名 GitHub API ポーリング（申請確認・実験待ち/生成中/誕生の観測）の実挙動 — ローカルではフェッチ注入の単体テストのみ。実ネットワークでのレート制限・CORS挙動は未検証。
+- [ ] Pages 本番での `dist/data/offspring.json` 配信（誕生のランタイム検知）— ローカル preview/dev では 200 を確認済み。
 
 ## 開発コマンド
 
@@ -170,15 +177,19 @@ npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル +
 ├── public/              # 公開サイト一式（Viteのroot。ページ・UI・静的ファイル）
 │   ├── index.html       # / トップ（交配研究所）
 │   ├── main.ts          # トップのUI（vanilla TS）
+│   ├── character.ts     # 博士キャラクター表示（状態・スプライト・読み上げ制御）
+│   ├── breeding-state.ts # 交配状態判定（申請確認/実験待ち/生成中/誕生の純関数）
+│   ├── github-watch.ts  # 匿名GitHub APIポーリング（上限・停止条件つき）
 │   ├── ideas.ts         # /ideas 一覧ページのUI
 │   ├── ideas/           # /ideas アイデア一覧（マルチページエントリ）
 │   ├── style.css        # 16bit 交配研究所テーマ
+│   ├── assets/          # ビルド取り込み対象（博士スプライト8枚 透過PNG 135×268）
 │   └── static/          # そのまま配信する生ファイル（dist直下へコピー）
-│       └── sprites/     # ピクセル絵素材（現時点では未参照・後で取り込む予定）
+│       └── sprites/     # ピクセル絵素材の原本（切り出し元）
 ├── lib/                 # 型・Issueパーサー・世代計算・候補選出・ProtoPedia/設定（フロント/ワーカー共有）
 ├── data/                # offspring.json / current-candidates.json / *sample*.json
 ├── logs/                # 開発ログ（public公開のため秘密情報は書かない / 書式は logs/README.md）
-├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot / gh（.envのGH_TOKEN実行ランナー）
+├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot / gh / slice-characters（博士スプライト切り出し）
 ├── tests/
 └── .github/workflows/   # deploy.yml / sync-prototypes.yml（dispatchのみ） /
                          # rotate-candidates.yml（毎時） / breed.yml（実装予定）
