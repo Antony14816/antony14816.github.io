@@ -173,7 +173,7 @@ if (existsSync(SAMPLE_FILE)) {
   console.log('ℹ️ sample-prototypes.json は無し（npm run fetch:sample で取得できます）');
 }
 
-// --- data/current-candidates.json（毎時の配合候補） --------------------------
+// --- data/current-candidates.json（15分ごとの配合候補） --------------------------
 
 const CAND_FILE = new URL('../data/current-candidates.json', import.meta.url);
 let candRaw: unknown;

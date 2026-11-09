@@ -12,7 +12,7 @@ ProtoPediaに公開された実在の作品を2つ「親」として選び、生
 | --- | --- |
 | 公開UI | GitHub Pages（Vite + TypeScript の静的サイト） |
 | 投稿 | GitHub Issues（サイトにログイン機能・書き込みトークンなし） |
-| 配合候補 | 毎時ローテ → `data/current-candidates.json`（**ブラウザはProtoPedia APIを呼ばない**） |
+| 配合候補 | 15分ローテ → `data/current-candidates.json`（**ブラウザはProtoPedia APIを呼ばない**） |
 | 作品データ | ProtoPedia API v2 → 少数取得（`data/sample-prototypes.json` ほか）→ 候補プール |
 | 配合ワーカー | GitHub Actions（毎時実行 + 手動 `workflow_dispatch`） |
 | 永続データ | リポジトリ内の `data/offspring.json` |
@@ -20,7 +20,7 @@ ProtoPediaに公開された実在の作品を2つ「親」として選び、生
 
 **1時間に1件だけAI配合が走ります（全ユーザー共有の枠）。** 閲覧・選択・系譜図表示にAIは使いません。
 
-**候補は毎時6件が全ユーザー共通**です。「本日の発明研究所」に並ぶ候補はスロット（UTC `YYYY-MM-DDTHH`）ごとに決定的に選ばれ、**ページを再読み込みしても変わりません**。自由検索はなく、候補から2作品（AとB）を選んで申請します。
+**候補は15分ごとに6件が全ユーザー共通**です。「本日の発明研究所」に並ぶ候補はスロット（UTC `YYYY-MM-DDTHHMM`・15分刻み）ごとに決定的に選ばれ、**ページを再読み込みしても変わりません**。自由検索はなく、候補から2作品（AとB）を選んで申請します。
 
 ## セットアップ（ローカル開発）
 
@@ -65,17 +65,17 @@ ProtoPedia API v2 ──(Bearer)──> npm run fetch:sample（少数・手動 /
                                    │ 取得 → HTML除去・型検証・URL検証・ライセンス確認
                                    ▼
                           data/sample-prototypes.json（候補プール）
-                                   │ npm run rotate:candidates（毎時・API/トークン不要）
+                                   │ npm run rotate:candidates（15分ごと・API/トークン不要）
                                    ▼
                           data/current-candidates.json ──> GitHub Pages（静的import）
 ```
 
 - **試作段階では全件収集を開始しない**: `npm run fetch:sample` は既定12件（`--count=` 上限50 / `--offset=`）。
   全件同期は `npm run sync:protopedia`。`sync-prototypes.yml` は**手動 dispatch のみ**（有効化するときだけ `schedule` を戻す）。
-- **候補ローテ**: `npm run rotate:candidates` は保存済みプールからスロット（UTC `YYYY-MM-DDTHH`）に**決定的に**6件を選出。
-  同じスロットなら常に同じ6件（Actionsの再実行・ローカル実行でも不変）。APIもトークンも使わない。
-  `-- --slot=2026-11-09T14` で任意の枠を検証、`-- --dry-run` で書き込まず確認。
-- **毎時更新**: `.github/workflows/rotate-candidates.yml`（cron + dispatch）がスロットを進めて `data/current-candidates.json` をコミット。
+- **候補ローテ**: `npm run rotate:candidates` は保存済みプールからスロット（UTC `YYYY-MM-DDTHHMM`・15分刻み）に**決定的に**6件を選出。
+  同じスロットなら常に同じ6件（15分枠内のActionsの再実行・ローカル実行でも不変）。APIもトークンも使わない。
+  `-- --slot=2026-11-09T1415` で任意の枠を検証、`-- --dry-run` で書き込まず確認。
+- **15分ごと更新**: `.github/workflows/rotate-candidates.yml`（cron `4/15 * * * *` + dispatch）がスロットを進めて `data/current-candidates.json` をコミット。
   画面上の「次回の候補更新予定」はこの**実行結果（JSONの値）**ベースで、Actionsの遅延時は注意書きが出ます。
 - **失敗時の挙動**: 取得失敗・0件・不正レスポンスでは既存JSONを置き換えない（0件保存は拒否）。
 - **トークンの扱い**: `.env` / Secretsのみ。スクリプトがreadFileSyncで読む（シェルにexportしない）。ログ・JSON・コミット・フロントバンドルに入れない。
@@ -91,7 +91,7 @@ parent_b: protopedia:5678
 parent_a_url: https://protopedia.net/prototype/1234 ← 表示・照合用の「データ」（httpsのみ）
 parent_b_url: https://protopedia.net/prototype/5678
 mode: fusion
-slot: 2026-11-09T12                                 ← 申請時の候補スロット（UTC）
+slot: 2026-11-09T1715                                ← 申請時の候補スロット（UTC・15分刻み。移行前のHH形式も許容）
 <!-- 任意: comment: の後に1行だけで自由記述（最大300字・配合の動機など） -->
 ```
 
@@ -193,5 +193,5 @@ npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル +
 ├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot / gh / slice-characters（博士スプライト切り出し）
 ├── tests/
 └── .github/workflows/   # deploy.yml / sync-prototypes.yml（dispatchのみ） /
-                         # rotate-candidates.yml（毎時） / breed.yml（実装予定）
+                         # rotate-candidates.yml（15分ごと） / breed.yml（実装予定）
 ```

@@ -4,7 +4,7 @@
 #
 # 注意（追加開発指示 §5）: 試作段階では「全件収集を開始しない」。
 # そのため定期実行は外し、手動 dispatch のみにしている。
-# 毎時の候補は data/sample-prototypes.json（少数取得）から rotate-candidates が選ぶ。
+# 15分ごとの候補は data/sample-prototypes.json（少数取得）から rotate-candidates が選ぶ。
 # 全件同期を有効にするときだけ schedule を戻すこと。
 name: Sync ProtoPedia works
 

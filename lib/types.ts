@@ -79,7 +79,7 @@ export interface BreedingRequest {
   parentA: ParentId;
   parentB: ParentId;
   mode: BreedingMode;
-  /** 申請時の候補スロット（任意）。形式: UTC "YYYY-MM-DDTHH"（追加開発指示 §8） */
+  /** 申請時の候補スロット（任意）。形式: UTC "YYYY-MM-DDTHHMM"・15分刻み（従来の "YYYY-MM-DDTHH" も許容 / issue #10） */
   slot?: string;
   /** 任意の自由記述コメント（1行・最大300字 / issue #7）。データとして保持するだけ。 */
   comment?: string;

@@ -67,6 +67,18 @@ describe('parseBreedingIssue', () => {
     if (r.ok) expect(r.request.slot).toBe('2026-11-09T12');
   });
 
+  it('slot は15分刻み HHMM（現行）と従来の時間枠 HH（移行前のIssue）の両方を受け付ける', () => {
+    const hhmm = parseBreedingIssue(
+      'parent_a: protopedia:1\nparent_b: protopedia:2\nslot: 2026-11-09T1715',
+    );
+    expect(hhmm.ok).toBe(true);
+    if (hhmm.ok) expect(hhmm.request.slot).toBe('2026-11-09T1715');
+    const hh = parseBreedingIssue(
+      'parent_a: protopedia:1\nparent_b: protopedia:2\nslot: 2026-11-09T17',
+    );
+    expect(hh.ok).toBe(true);
+  });
+
   it('slot 形式が不正なら却下する', () => {
     expect(
       parseBreedingIssue('parent_a: protopedia:1\nparent_b: protopedia:2\nslot: today').ok,

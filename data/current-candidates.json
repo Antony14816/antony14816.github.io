@@ -1,10 +1,38 @@
 {
   "schemaVersion": 1,
-  "slot": "2026-11-09T12",
-  "generatedAt": "2026-11-09T12:43:16.714Z",
-  "nextSlot": "2026-11-09T13",
+  "slot": "2026-11-09T1745",
+  "generatedAt": "2026-11-09T17:47:27.095Z",
+  "nextSlot": "2026-11-09T1800",
   "source": "data/sample-prototypes.json",
   "candidates": [
+    {
+      "id": "protopedia:1",
+      "title": "クラッピーで仮装大賞",
+      "sourceUrl": "https://protopedia.net/prototype/1",
+      "summary": "合格したい！",
+      "generation": 0,
+      "mainUrl": "https://protopedia.net/pic/9c507193-d695-4795-b0e6-4a11daa719e9.jpg",
+      "authors": [
+        "ひさやん@hisayan"
+      ],
+      "tags": [
+        "おもちゃ",
+        "クラッピーチャレンジ"
+      ],
+      "licenseType": "CC BY 4+"
+    },
+    {
+      "id": "protopedia:8",
+      "title": "Project Musha 視覚障害体験AR",
+      "sourceUrl": "https://protopedia.net/prototype/8",
+      "summary": "健常者にとって全盲は両目を閉じることで体感できますが、 視野狭窄や色盲がどの程度生活しづらいかは想像しにくいです。 それらをARで体験できるように、プロトタイプをつくりました。 \"左右別々の眼の症状\" を設定できる安価なシミュレーターは、実はなかなかの発明で \"世界初\" と思われます。 別々に設定し、体験すると、かなり気持ち悪いです。 動作環境は Androidスマホ + Chrome Browser 推奨環境は Google CardBoard などのスマホをAR/VRゴーグルにするガジェットです。 ※アプリ化し、いくつかAPIとのマッシュアップも検討したのですが、まずはどなたにも簡単に体験いただきやすいWebブラウザアプリとして開発してみました。",
+      "generation": 0,
+      "mainUrl": "https://protopedia.net/pic/edc84a49-d26a-4336-98d1-053d7dcc716f.png",
+      "authors": [
+        "ひさやん@hisayan"
+      ],
+      "licenseType": "CC BY 4+"
+    },
     {
       "id": "protopedia:10",
       "title": "また、会いに行きたくなるビアサーバー by No Beer No Life",
@@ -17,21 +45,6 @@
         "kazu@kazu2112",
         "TakuKobayashi@takukobayashi",
         "ひさやん@hisayan"
-      ],
-      "licenseType": "CC BY 4+"
-    },
-    {
-      "id": "protopedia:18",
-      "title": "ハンドクラッピナー",
-      "sourceUrl": "https://protopedia.net/prototype/18",
-      "summary": "結構よく回ります *** ** * ** *** ハンドスピナー (2枚タイプ) パチパチトールくん (赤・黄各1個) 参考URL:",
-      "generation": 0,
-      "mainUrl": "https://protopedia.net/pic/035f119d-9aa9-4f5e-88b6-e49b732c1491.jpg",
-      "authors": [
-        "Masawo Yamazaki@masawoyamazaki"
-      ],
-      "tags": [
-        "クラッピーチャレンジ"
       ],
       "licenseType": "CC BY 4+"
     },
@@ -56,30 +69,12 @@
       "licenseType": "CC BY 4+"
     },
     {
-      "id": "protopedia:4",
-      "title": "Pour or Drink",
-      "sourceUrl": "https://protopedia.net/prototype/4",
-      "summary": "一瞬で仲良くなれます。",
+      "id": "protopedia:18",
+      "title": "ハンドクラッピナー",
+      "sourceUrl": "https://protopedia.net/prototype/18",
+      "summary": "結構よく回ります *** ** * ** *** ハンドスピナー (2枚タイプ) パチパチトールくん (赤・黄各1個) 参考URL:",
       "generation": 0,
-      "mainUrl": "https://protopedia.net/pic/ddf1faf1-faf5-4a70-b079-c0a0b5b9644a.jpg",
-      "authors": [
-        "ひさやん@hisayan",
-        "佐田幸宏@yukihirosada",
-        "鈴木まなみ@rin2tree"
-      ],
-      "tags": [
-        "ノーコード",
-        "飲み会が盛り上がる"
-      ],
-      "licenseType": "CC BY 4+"
-    },
-    {
-      "id": "protopedia:22",
-      "title": "コスラッピー",
-      "sourceUrl": "https://protopedia.net/prototype/22",
-      "summary": "クラッピーのコスプレ用です参考URL:",
-      "generation": 0,
-      "mainUrl": "https://protopedia.net/pic/6c255377-2995-4a7f-9ee5-77b75faeb943.jpg",
+      "mainUrl": "https://protopedia.net/pic/035f119d-9aa9-4f5e-88b6-e49b732c1491.jpg",
       "authors": [
         "Masawo Yamazaki@masawoyamazaki"
       ],

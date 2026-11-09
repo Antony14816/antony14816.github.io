@@ -27,7 +27,7 @@ const offspring = (rawOffspring as unknown as Offspring[]).slice();
 const sampleWorks = (sampleWorksJson as { works: ProtopediaWork[] }).works;
 const sampleOffspring = (rawSampleOffspring as unknown as Offspring[]).slice();
 
-// 毎時の配合候補（data/current-candidates.json。Actions「Rotate candidates」が毎時更新）。
+// 15分ごとの配合候補（data/current-candidates.json。Actions「Rotate candidates」が15分ごと更新）。
 // ブラウザからProtoPedia APIは呼ばない。ページ再読み込みで候補は変わらない。
 // 形が想定外なら開発用サンプルに落とし、[SAMPLE] 表記で本番と明確に区別する。
 const candidatesFile: CandidatesFile | null = isCandidatesFile(rawCandidates)
@@ -200,7 +200,7 @@ wrap.append(
     'div',
     { class: 'memo window' },
     el('div', { class: 'titlebar' }, el('span', {}, '所長のメモ')),
-    el('p', {}, '1時間ごとに新しい発明候補が届くよ！2つえらんで「配合を申し込む」と、GitHub Issueの申し込み画面が開きます。'),
+    el('p', {}, '15分ごとに新しい発明候補が届くよ！2つえらんで「配合を申し込む」と、GitHub Issueの申し込み画面が開きます。'),
     el('p', {}, '配合は1時間に最大1件。この組み合わせ、何が生まれるんだろう？ 生成されるのはすべてAIが考えた未実装のアイデアです。'),
   ),
 );
@@ -248,7 +248,7 @@ if (!repoCfg) {
 }
 
 // ---------------------------------------------------------------------------
-// ① 今時間の配合候補（毎時6件・全ユーザー共通。追加開発指示 §2/§3）
+// ① 今の15分枠の配合候補（1枠6件・全ユーザー共通。追加開発指示 §2/§3 / issue #10）
 // ---------------------------------------------------------------------------
 
 // 完成イメージ（tmp/CleanShot 2026-11-09 at 21.43.19.png）準拠:
@@ -269,9 +269,23 @@ const SELECT_MSGS: Record<number, string> = {
 };
 const bannoGuide = createCharacter('banno', { message: SELECT_MSGS[0] });
 
-/** slot "YYYY-MM-DDTHH"（UTC）を日本時間の表示に変換する。 */
+/** 候補スロット "YYYY-MM-DDTHHMM"（15分刻み）を時刻msへ（従来の時間枠 "YYYY-MM-DDTHH" も許容）。 */
+function slotToDate(slot: string): number {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})?$/.exec(slot);
+  if (!m) return Number.NaN;
+  return Date.parse(`${m[1]}T${m[2]}:${m[3] ?? '00'}:00Z`);
+}
+
+/** slot（UTC）を "YYYY-MM-DDTHH:MM UTC" 表示にする。 */
+function fmtSlotUtc(slot: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})?$/.exec(slot);
+  if (!m) return slot;
+  return `${m[1]}T${m[2]}:${m[3] ?? '00'} UTC`;
+}
+
+/** slot（UTC）を日本時間の表示に変換する。 */
 function fmtJst(slot: string): string {
-  const ms = Date.parse(`${slot}:00:00Z`);
+  const ms = slotToDate(slot);
   if (Number.isNaN(ms)) return slot;
   return new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo',
@@ -297,13 +311,15 @@ if (candidatesFile) {
       'div',
       {},
       '次回の候補更新予定: ',
-      el('span', { class: 'value' }, `${f.nextSlot}:00 UTC`),
-      `（日本時間 ${fmtJst(f.nextSlot)} 頃・毎時更新）`,
+      el('span', { class: 'value' }, fmtSlotUtc(f.nextSlot)),
+      `（日本時間 ${fmtJst(f.nextSlot)} 頃・15分ごと更新）`,
     ),
   );
-  // Actionsの実行遅延はJSONの値（実行結果）ベースで表現する（端末時計で補完しない）
-  const nextMs = Date.parse(`${f.nextSlot}:00:00Z`);
-  if (Number.isFinite(nextMs) && Date.now() > nextMs) {
+  // Actionsの実行遅延はJSONの値（実行結果）ベースで表現する（端末時計で補完しない）。
+  // cron が15分境界の+4分（:04/:19/:34/:49）で走るため、そこへの猶予を足してから判定する。
+  const UPDATE_GRACE_MS = 6 * 60_000;
+  const nextMs = slotToDate(f.nextSlot);
+  if (Number.isFinite(nextMs) && Date.now() > nextMs + UPDATE_GRACE_MS) {
     candMeta.append(
       el('div', { class: 'stale' }, '⚠ 候補更新が遅れています（Actionsの実行完了後に切り替わります）。'),
     );
@@ -319,12 +335,12 @@ if (candidatesFile) {
   );
 }
 candMeta.append(
-  el('div', { class: 'hint' }, '候補は1時間ごとに差し替わります。ページを再読み込みしても候補は変わりません。'),
+  el('div', { class: 'hint' }, '候補は15分ごとに差し替わります。ページを再読み込みしても候補は変わりません。'),
 );
 // 右上バッジ: サンプル表示中か本番候補かを常に見せる
 stateBadge.textContent = usingSampleCandidates
   ? '開発用サンプル'
-  : `毎時${CANDIDATES_PER_SLOT}件・全ユーザー共通`;
+  : `15分ごとに${CANDIDATES_PER_SLOT}件・全ユーザー共通`;
 if (usingSampleCandidates) stateBadge.classList.add('chip-warn');
 
 // --- 選択状態（親A / 親B） -------------------------------------------------

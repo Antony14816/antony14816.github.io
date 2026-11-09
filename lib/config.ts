@@ -27,7 +27,7 @@ export function repoConfigFromEnv(
 /** 配合申請リンクに含める任意フィールド（追加開発指示 §8: 元作品URL・候補スロット）。 */
 export interface IssueLinkOptions {
   mode?: string;
-  /** 申請時の候補スロット（UTC "YYYY-MM-DDTHH"） */
+  /** 申請時の候補スロット（UTC "YYYY-MM-DDTHHMM"・15分刻み。従来HHも許容） */
   slot?: string;
   /** 親Aの元作品URL（ProtoPediaの作品ページ） */
   parentAUrl?: string;

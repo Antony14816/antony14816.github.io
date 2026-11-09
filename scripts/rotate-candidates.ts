@@ -1,14 +1,14 @@
 /**
- * 毎時の配合候補の更新。（追加開発指示 §7）
+ * 15分ごとの配合候補の更新。（追加開発指示 §7 / issue #10）
  *
- * 保存済みの作品データから、スロット（UTC "YYYY-MM-DDTHH"）に決定的に6件を選ぶ。
+ * 保存済みの作品データから、スロット（UTC "YYYY-MM-DDTHHMM"・15分刻み）に決定的に6件を選ぶ。
  * - 同じスロットなら常に同じ候補（Actionsの再実行・ローカル実行でも同じ結果）
  * - data/current-candidates.json に slot / generatedAt / nextSlot / 候補を記録
  * - プール0件・不正データ時は exit 1。既存の current-candidates.json は無変更。
  *
  * 使い方:
  *   node --experimental-strip-types scripts/rotate-candidates.ts
- *   node --experimental-strip-types scripts/rotate-candidates.ts --slot=2026-11-09T14
+ *   node --experimental-strip-types scripts/rotate-candidates.ts --slot=2026-11-09T1415
  *   node --experimental-strip-types scripts/rotate-candidates.ts --dry-run
  *
  * ProtoPedia APIは呼ばない（トークン不要）。
@@ -19,9 +19,9 @@ import { fileURLToPath } from 'node:url';
 import {
   CANDIDATES_PER_SLOT,
   buildCandidatesFile,
+  candidateSlotKey,
   nextSlotKey,
 } from '../lib/candidates.ts';
-import { slotKey } from '../lib/generation.ts';
 import type { ProtopediaWork } from '../lib/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -60,7 +60,7 @@ function main(): void {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const slotArg = args.find((a) => a.startsWith('--slot='));
-  const slot = slotArg ? slotArg.slice('--slot='.length) : slotKey(new Date());
+  const slot = slotArg ? slotArg.slice('--slot='.length) : candidateSlotKey(new Date());
   // 形式検証（不正なら例外で落とす = 書き込まない）
   nextSlotKey(slot);
 
@@ -97,7 +97,7 @@ function main(): void {
     const by = c.authors && c.authors.length > 0 ? ` / ${c.authors[0]}` : '';
     console.log(`   - ${c.id} ${c.title}${by}`);
   }
-  console.log(`   次回更新予定: ${file.nextSlot}（UTC時間帯の切り替わり）`);
+  console.log(`   次回更新予定: ${file.nextSlot}（UTCの15分境界で切り替わり）`);
 
   if (dryRun) {
     console.log('🏁 dry-run: data/current-candidates.json は変更していません。');

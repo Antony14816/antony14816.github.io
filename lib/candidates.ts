@@ -1,28 +1,32 @@
 /**
- * 毎時の配合候補（6件）の決定的選出。（追加開発指示 §3 / §7）
+ * 15分ごとの配合候補（6件）の決定的選出。（追加開発指示 §3 / §7 / issue #10）
  *
  * 要件:
- * - 候補は毎時最大6作品・重複表示なし。
- * - 1時間の間は全ユーザーに同じ候補（= 同じスロット文字列なら常に同じ選出）。
+ * - 候補は1枠（15分）につき最大6作品・重複表示なし。
+ * - 15分の間は全ユーザーに同じ候補（= 同じスロット文字列なら常に同じ選出）。
  * - ページ再読み込みで候補を変化させない（UIは data/current-candidates.json を読むだけ）。
  * - 候補の生成時刻（generatedAt）と対象時間帯（slot）をJSONに記録する。
  * - Actionsの実行遅延に備え、表示はJSONの値（実行結果）ベースにする。
  *
+ * ※ 候補スロット（15分刻み "YYYY-MM-DDTHHMM"）と、
+ *   配合スロット（1時間1件・lib/generation.ts slotKey "YYYY-MM-DDTHH"）は別物。
+ *
  * このモジュールは純関数のみ（Node依存なし）。フロント・ワーカー・テストで共有する。
  */
-import { slotKey } from './generation.ts';
 import type { ProtopediaWork } from './types.ts';
 
-/** 毎時の候補数（最大）。プールが6未満ならその件数まで。 */
+/** 候補の更新間隔（分）。cron は `4/15 * * * *`（正時回避のため境界+4分）。 */
+export const CANDIDATE_SLOT_MINUTES = 15;
+/** 1枠（15分）の候補数（最大）。プールが6未満ならその件数まで。 */
 export const CANDIDATES_PER_SLOT = 6;
 
 export interface CandidatesFile {
   schemaVersion: 1;
-  /** 対象時間帯（UTC "YYYY-MM-DDTHH"）。このスロット中は全ユーザー共通。 */
+  /** 対象時間帯（UTC "YYYY-MM-DDTHHMM"・15分刻み）。このスロット中は全ユーザー共通。 */
   slot: string;
   /** このJSONの実際の生成時刻（Actions実行結果。UIはこの値を信用する）。 */
   generatedAt: string;
-  /** 次の候補更新予定（= slot の次の時間帯開始 "YYYY-MM-DDTHH"）。 */
+  /** 次の候補更新予定（= slot の次の15分境界 "YYYY-MM-DDTHHMM"）。 */
   nextSlot: string;
   /** 候補元のデータファイル（例: "data/sample-prototypes.json"）。 */
   source: string;
@@ -30,7 +34,7 @@ export interface CandidatesFile {
   candidates: ProtopediaWork[];
 }
 
-const SLOT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}$/;
+const SLOT_RE = /^\d{4}-\d{2}-\d{2}T\d{4}$/;
 
 /** FNV-1a 32bit（スロット文字列 → 乱数シード）。 */
 export function hashSlot(slot: string): number {
@@ -63,7 +67,7 @@ function numericId(id: string): number {
  * プールからスロット単位で候補を選ぶ。
  * - ID重複を排除し、ID昇順で安定ソート（入力ファイルの並び順に依存しない）。
  * - スロットのハッシュをシードにシャッフルし、上位 count 件を返す。
- * - 同じ（プール, スロット）なら常に同じ結果（再実行・再読み込みで不変）。
+ * - 同じ（プール, スロット）なら常に同じ結果（15分枠内の再実行・再読み込みで不変）。
  */
 export function selectCandidates(
   pool: readonly ProtopediaWork[],
@@ -89,12 +93,32 @@ export function selectCandidates(
   return uniq.slice(0, Math.min(count, uniq.length));
 }
 
-/** slot "YYYY-MM-DDTHH" の次の時間帯。形式不正は例外。 */
+/**
+ * UTC基準の候補スロットキー "YYYY-MM-DDTHHMM"（15分境界に切り下げ）。
+ * Actionsの再実行・手動実行でも同じ枠内で常に同じスロットになる（決定的な選出の前提）。
+ */
+export function candidateSlotKey(date: Date = new Date()): string {
+  const y = date.getUTCFullYear();
+  const mo = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const h = String(date.getUTCHours()).padStart(2, '0');
+  const mi = String(Math.floor(date.getUTCMinutes() / CANDIDATE_SLOT_MINUTES) * CANDIDATE_SLOT_MINUTES).padStart(
+    2,
+    '0',
+  );
+  return `${y}-${mo}-${d}T${h}${mi}`;
+}
+
+/** slot "YYYY-MM-DDTHHMM" の次の15分境界。形式不正は例外。 */
 export function nextSlotKey(slot: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})$/.exec(slot);
-  if (!m) throw new Error(`slot 形式が不正です（YYYY-MM-DDTHH）: ${slot}`);
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]) + 1));
-  return slotKey(d);
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})$/.exec(slot);
+  if (!m) throw new Error(`slot 形式が不正です（YYYY-MM-DDTHHMM）: ${slot}`);
+  const d = new Date(
+    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]) + CANDIDATE_SLOT_MINUTES),
+  );
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mi = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}T${hh}${mi}`;
 }
 
 /** 候補JSONを組み立てる。プール0件は例外（= 既存ファイルを更新しない）。 */

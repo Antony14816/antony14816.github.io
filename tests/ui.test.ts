@@ -60,7 +60,7 @@ it('パネル見出し「本日の発明研究所」と右上バッジが表示�
   expect(document.querySelector('.lab-head h2')?.textContent).toBe('本日の発明研究所');
   expect(document.querySelector('.lab-sub')?.textContent).toBe('LAB / INVENTION CANDIDATES');
   const chip = document.querySelector('.lab-head .chip')?.textContent ?? '';
-  expect(chip).toBe(candFileValid ? '毎時6件・全ユーザー共通' : '開発用サンプル');
+  expect(chip).toBe(candFileValid ? '15分ごとに6件・全ユーザー共通' : '開発用サンプル');
 });
 
 it('画像はlazy読込・alt付き。画像が無いカードはプレースホルダで枠が残る', async () => {

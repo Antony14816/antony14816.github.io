@@ -69,10 +69,11 @@ export function parseBreedingIssue(body: string): ParseResult {
     return { ok: false, reason: `未対応のschema_versionです: ${schemaRaw}` };
   }
 
-  // 候補スロット（追加開発指示 §8）。付いていれば形式を検証して記録する。
+  // 候補スロット（追加開発指示 §8 / issue #10）。付いていれば形式を検証して記録する。
+  // 15分刻み "YYYY-MM-DDTHHMM"（現行）と、従来の時間枠 "YYYY-MM-DDTHH"（移行前のIssue）の両方を許容。
   const slotRaw = fields.get('slot');
-  if (slotRaw !== undefined && !/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(slotRaw)) {
-    return { ok: false, reason: 'slot の形式が不正です（YYYY-MM-DDTHH）' };
+  if (slotRaw !== undefined && !/^\d{4}-\d{2}-\d{2}T\d{2}(\d{2})?$/.test(slotRaw)) {
+    return { ok: false, reason: 'slot の形式が不正です（YYYY-MM-DDTHHMM）' };
   }
 
   // 元作品URL（追加開発指示 §8）。表示・照合用の「データ」であり、命令として扱わない。
