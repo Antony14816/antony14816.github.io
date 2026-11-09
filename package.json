@@ -10,11 +10,14 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "validate-data": "node --experimental-strip-types scripts/validate-data.ts"
+    "validate-data": "node --experimental-strip-types scripts/validate-data.ts",
+    "screenshot": "node scripts/screenshot.mjs",
+    "deploy": "node scripts/deploy.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "happy-dom": "^21.0.4",
+    "playwright": "^1.65.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",
     "vitest": "^3.2.4"

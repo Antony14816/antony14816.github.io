@@ -1,63 +1,223 @@
+/* ==========================================================================
+   Mashup Ours — ドット絵風ダークテーマ
+   参考: ピンク×ニアブラック×等幅×ピクセル装飾のレトロWeb
+
+   チャート（家系図）パレットは dataviz 手順で検証済み:
+     surface #15121c / series-1 #00a0c8 / series-2 #ef3b80
+     → ライトネス帯・彩度下限・CVD分離・通常視覚・コントラスト全PASS
+   テキストは必ずインクトークン（--ink / --ink-2 / --muted）を使う。
+   ========================================================================== */
+
 :root {
-  --bg: #0f1115;
-  --panel: #171a21;
-  --panel-2: #1e222b;
-  --border: #2b303b;
-  --text: #e6e8ec;
-  --muted: #9aa1ad;
-  --accent: #6ea8fe;
-  --accent-2: #8f7bfe;
-  --sample: #e0b354;
-  --danger: #ff7b72;
-  --radius: 10px;
+  color-scheme: dark;
+
+  --bg: #0a0810;
+  --grid: rgba(126, 116, 168, 0.055);
+  --panel: #15121c;
+  --panel-2: #1d1926;
+  --border: #322c40;
+  --shadow: #000;
+
+  /* ink tokens（テキストはここだけ使う） */
+  --ink: #f2f0f7;
+  --ink-2: #b9b4c7;
+  --muted: #7e7a8f;
+
+  /* UIアクセント（装飾・ボタン・見出しの線） */
+  --accent: #ff5c92;
+  --accent-deep: #ef3b80;
+  --link: #56cdf3;
+  --sample: #ffc24b;
+  --danger: #ff6b61;
+
+  /* チャート系列色（検証済み・勝手に替えない） */
+  --series-1: #00a0c8; /* ProtoPedia 元作品 */
+  --series-2: #ef3b80; /* AI生成の子作品 */
+
+  --font-pixel: "DotGothic16", "MS Gothic", "Osaka-Mono", monospace;
+  --font-en: "Press Start 2P", ui-monospace, monospace;
+  --font-mono: ui-monospace, "SFMono-Regular", "DotGothic16", monospace;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+}
+
 body {
   margin: 0;
-  font-family: "Hiragino Sans", "Noto Sans JP", system-ui, -apple-system, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.6;
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink);
+  /* グリッド調テクスチャ（参考画像の背景） */
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 a {
+  color: var(--link);
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+
+a:hover {
   color: var(--accent);
 }
 
-.wrap {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 24px 16px 64px;
+:focus-visible {
+  outline: 2px dotted var(--link);
+  outline-offset: 2px;
 }
 
+.wrap {
+  position: relative;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+/* --- ピクセル装飾 ------------------------------------------------------- */
+
+/* パネルの四隅にL字コーナーブラケット（参考画像のコーナー装飾） */
+.panel,
+.notice,
+.detail {
+  position: relative;
+}
+
+.panel::before,
+.notice::before,
+.detail::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+  pointer-events: none;
+}
+
+.panel::after,
+.detail::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--series-1);
+  border-bottom: 2px solid var(--series-1);
+  pointer-events: none;
+}
+
+/* 浮遊するピクセルスプライト（参考画像の端末装飾） */
+.sprite {
+  position: absolute;
+  image-rendering: pixelated;
+  opacity: 0.5;
+  pointer-events: none;
+  animation: sprite-blink 2.4s steps(2, end) infinite;
+}
+
+.sprite.s1 {
+  top: 90px;
+  right: 4px;
+}
+
+.sprite.s2 {
+  top: 320px;
+  left: 0;
+  animation-delay: 1.2s;
+}
+
+@keyframes sprite-blink {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sprite {
+    animation: none;
+  }
+}
+
+/* 狭い画面ではコンテンツと重なるので装飾スプライトは隠す */
+@media (max-width: 760px) {
+  .sprite {
+    display: none;
+  }
+}
+
+/* --- ヘッダー ------------------------------------------------------------ */
+
 header.hero {
-  padding: 24px 0 8px;
+  padding: 28px 0 8px;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-family: var(--font-pixel);
+  font-size: 0.8rem;
+  letter-spacing: 0.35em;
+  margin: 0 0 10px;
+}
+
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hero-title-row .logo {
+  image-rendering: pixelated;
+  flex: none;
 }
 
 header.hero h1 {
   margin: 0;
-  font-size: 1.9rem;
-  letter-spacing: 0.02em;
+  font-family: var(--font-en);
+  font-size: clamp(1.15rem, 4vw, 1.9rem);
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  color: var(--ink);
+  text-shadow: 3px 3px 0 var(--shadow);
 }
 
 header.hero .copy {
-  color: var(--muted);
+  color: var(--accent);
   font-size: 1.05rem;
-  margin: 6px 0 0;
+  margin: 10px 0 0;
+  letter-spacing: 0.08em;
 }
 
+/* --- 通知 --------------------------------------------------------------- */
+
 .notice {
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   background: var(--panel);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  margin: 16px 0;
+  box-shadow: 4px 4px 0 var(--shadow);
+  padding: 12px 16px;
+  margin: 18px 0;
   font-size: 0.92rem;
-  color: var(--muted);
+  color: var(--ink-2);
+}
+
+.notice strong {
+  color: var(--accent);
 }
 
 .notice.warn {
@@ -65,28 +225,46 @@ header.hero .copy {
   color: var(--sample);
 }
 
+.notice.warn::before {
+  border-color: var(--sample);
+}
+
 .notice.error {
   border-color: var(--danger);
   color: var(--danger);
 }
 
+.notice.error::before {
+  border-color: var(--danger);
+}
+
+/* --- セクション ---------------------------------------------------------- */
+
 section {
-  margin-top: 28px;
+  margin-top: 34px;
 }
 
 section > h2 {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
+  font-weight: normal;
+  letter-spacing: 0.12em;
   margin: 0 0 12px;
-  border-left: 4px solid var(--accent-2);
-  padding-left: 10px;
+  color: var(--ink);
+}
+
+section > h2::before {
+  content: "▸ ";
+  color: var(--accent);
 }
 
 .panel {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 var(--shadow);
+  padding: 18px;
 }
+
+/* --- 親選択 -------------------------------------------------------------- */
 
 .picker {
   display: grid;
@@ -106,21 +284,29 @@ section > h2 {
   font-size: 0.9rem;
   color: var(--muted);
   margin-bottom: 6px;
+  letter-spacing: 0.1em;
 }
 
 .picker select {
   width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
-  color: var(--text);
+  padding: 11px 34px 11px 12px;
+  border: 2px solid var(--border);
+  border-radius: 0;
+  background-color: var(--panel-2);
+  /* ピクセル三角のカスタム矢印 */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 2h2v2h2v2h2V6h2V4h2V2h2H0z' fill='%23ff5c92'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  appearance: none;
+  color: var(--ink);
+  font-family: var(--font-pixel);
   font-size: 0.95rem;
+  box-shadow: 3px 3px 0 var(--shadow);
 }
 
 .picker .cross {
-  font-size: 1.4rem;
-  color: var(--muted);
+  font-size: 1.3rem;
+  color: var(--accent);
   padding-bottom: 8px;
   text-align: center;
 }
@@ -130,22 +316,34 @@ section > h2 {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 button.breed {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #0b0d12;
-  font-weight: 700;
-  border: none;
-  border-radius: 999px;
-  padding: 12px 22px;
+  font-family: var(--font-pixel);
   font-size: 1rem;
+  font-weight: normal;
+  letter-spacing: 0.06em;
+  background: var(--accent-deep);
+  color: #1a0410;
+  border: 2px solid #ff9ec4;
+  border-radius: 0;
+  padding: 12px 22px;
   cursor: pointer;
+  box-shadow: 4px 4px 0 var(--shadow);
+}
+
+button.breed:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+button.breed:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--shadow);
 }
 
 button.breed:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -154,50 +352,66 @@ button.breed:disabled {
   font-size: 0.88rem;
 }
 
+/* --- 交配枠 -------------------------------------------------------------- */
+
 .slot {
   display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
   font-size: 0.95rem;
+  color: var(--ink-2);
 }
 
 .slot .value {
-  font-family: ui-monospace, monospace;
-  color: var(--accent);
+  font-family: var(--font-mono);
+  color: var(--link);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 1px 8px;
 }
+
+/* --- 子作品リスト --------------------------------------------------------- */
 
 ul.offspring {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 ul.offspring li {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 var(--shadow);
+  padding: 13px 16px;
   cursor: pointer;
 }
 
 ul.offspring li:hover {
-  border-color: var(--accent);
+  border-color: var(--series-2);
+}
+
+ul.offspring .title::before {
+  content: "▸ ";
+  color: var(--accent);
 }
 
 ul.offspring .title {
-  font-weight: 700;
+  font-weight: normal;
+  letter-spacing: 0.04em;
 }
 
 .badge {
   display: inline-block;
   font-size: 0.72rem;
+  font-family: var(--font-pixel);
+  letter-spacing: 0.08em;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 1px 8px;
   margin-left: 6px;
-  color: var(--muted);
+  color: var(--ink-2);
   vertical-align: middle;
 }
 
@@ -207,16 +421,48 @@ ul.offspring .title {
 }
 
 .badge.idea {
-  border-color: var(--accent-2);
-  color: var(--accent-2);
+  border-color: var(--series-2);
+  color: var(--accent);
+}
+
+/* --- 家系図 -------------------------------------------------------------- */
+
+.pedigree-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+
+.pedigree-legend .key {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pedigree-legend .swatch {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  background: var(--panel-2);
+}
+
+.pedigree-legend .swatch.proto {
+  border: 2px solid var(--series-1);
+}
+
+.pedigree-legend .swatch.child {
+  border: 2px dashed var(--series-2);
 }
 
 .pedigree-scroll {
   overflow-x: auto;
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 8px;
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 var(--shadow);
+  padding: 10px;
 }
 
 .pedigree-scroll svg {
@@ -229,67 +475,103 @@ ul.offspring .title {
 
 .pedigree-scroll .node rect {
   fill: var(--panel-2);
-  stroke: var(--border);
+  shape-rendering: crispEdges;
 }
 
 .pedigree-scroll .node.proto rect {
-  stroke: var(--accent);
+  stroke: var(--series-1);
+  stroke-width: 2;
 }
 
 .pedigree-scroll .node.child rect {
-  stroke: var(--accent-2);
-  stroke-dasharray: 4 3;
+  stroke: var(--series-2);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
 }
 
-.pedigree-scroll .node:hover rect {
-  stroke: #fff;
+.pedigree-scroll .node:hover rect,
+.pedigree-scroll .node:focus-visible rect {
+  fill: #2a2438;
+  stroke: var(--ink);
 }
 
 .pedigree-scroll .node text {
-  fill: var(--text);
-  font-size: 12px;
+  fill: var(--ink);
+  font-family: var(--font-pixel);
+  font-size: 13px;
   pointer-events: none;
 }
 
 .pedigree-scroll .edge {
-  stroke: var(--border);
-  stroke-width: 1.5;
+  stroke: #3d3652;
+  stroke-width: 2;
   fill: none;
+  shape-rendering: crispEdges;
 }
+
+/* --- 詳細パネル ----------------------------------------------------------- */
 
 .detail {
   background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-top: 12px;
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 var(--shadow);
+  padding: 18px;
+  margin-top: 14px;
 }
 
 .detail h3 {
   margin: 0 0 6px;
+  font-size: 1.1rem;
+  font-weight: normal;
+  letter-spacing: 0.06em;
+}
+
+.detail dl {
+  margin: 0;
 }
 
 .detail dt {
   color: var(--muted);
-  font-size: 0.85rem;
-  margin-top: 10px;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  margin-top: 14px;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
 }
 
 .detail dd {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
+  color: var(--ink);
+}
+
+.detail ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
 }
 
 button.linkish {
   background: none;
   border: none;
+  border-radius: 0;
   padding: 0;
-  color: var(--accent);
+  color: var(--link);
   cursor: pointer;
+  font-family: var(--font-pixel);
   font-size: inherit;
-  text-decoration: underline;
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+
+button.linkish:hover {
+  color: var(--accent);
 }
 
 .empty {
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+ul.offspring li.empty .title::before,
+ul.offspring li.empty::before {
+  content: none;
 }

@@ -16,7 +16,9 @@ const sampleOffspring = (rawSampleOffspring as unknown as Offspring[]).slice();
 
 // ProtoPedia API未接続のため、現時点では開発用サンプル作品のみを表示する。
 const works: ProtopediaWork[] = sampleWorks;
-const showSampleOffspring = offspring.length === 0 && import.meta.env.DEV;
+// 本番データが0件の間はサンプル子作品も表示する（家系図が空にならないように。
+// 各データは sample フラグ・[SAMPLE]表記つきで本番と明確に区別される）。
+const showSampleOffspring = offspring.length === 0;
 const children: Offspring[] = showSampleOffspring ? sampleOffspring : offspring;
 
 const repoCfg = repoConfigFromEnv({
@@ -50,6 +52,78 @@ function isOffspring(n: ProtopediaWork | Offspring | undefined): n is Offspring 
   return !!n && 'sourceIssue' in n;
 }
 
+// --- ピクセルスプライト（SVG文字列マップから生成。画像アセット不要） --------
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** ASCIIマップからピクセルSVGを作る。'o' = 塗り, それ以外は空白。 */
+function pixelSprite(
+  rows: readonly string[],
+  color: string,
+  pixelSize = 1,
+): SVGSVGElement {
+  const w = Math.max(...rows.map((r) => r.length));
+  const h = rows.length;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('width', String(w * pixelSize * 4));
+  svg.setAttribute('height', String(h * pixelSize * 4));
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  svg.setAttribute('aria-hidden', 'true');
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (ch !== 'o') return;
+      const rect = document.createElementNS(SVG_NS, 'rect');
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('y', String(y));
+      rect.setAttribute('width', '1');
+      rect.setAttribute('height', '1');
+      rect.setAttribute('fill', color);
+      svg.append(rect);
+    });
+  });
+  return svg;
+}
+
+/** 親×親 → 子 を表すピクセルのDNAバツ印ロゴ。 */
+function logoSprite(): SVGSVGElement {
+  const cells: [number, number, string][] = [];
+  const size = 16;
+  for (let i = 0; i < 8; i++) {
+    const c = i * 2;
+    cells.push([c, c, i === 4 ? '#f2f0f7' : '#ef3b80']); // \ 系（中央は白）
+    cells.push([size - 2 - c, c, i === 4 ? '#f2f0f7' : '#00a0c8']); // / 系
+  }
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', '40');
+  svg.setAttribute('height', '40');
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Mashup Ours ロゴ');
+  for (const [x, y, fill] of cells) {
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('x', String(x));
+    rect.setAttribute('y', String(y));
+    rect.setAttribute('width', '2');
+    rect.setAttribute('height', '2');
+    rect.setAttribute('fill', fill);
+    svg.append(rect);
+  }
+  return svg;
+}
+
+/** 参考画像の端にいるような小さなピクセル生き物。 */
+const CRITTER = [
+  '..oooo..',
+  '.oooooo.',
+  'oo.oo.oo',
+  'oooooooo',
+  'oooooooo',
+  '.oooooo.',
+  '..o..o..',
+] as const;
+
 function label(n: ProtopediaWork | Offspring | undefined): string {
   return n ? n.title : '(不明)';
 }
@@ -62,14 +136,23 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 const wrap = el('div', { class: 'wrap' });
 app.append(wrap);
 
+const heroTitleRow = el('div', { class: 'hero-title-row' }, logoSprite(), el('h1', {}, 'Mashup Ours'));
 wrap.append(
   el(
     'header',
     { class: 'hero' },
-    el('h1', {}, 'Mashup Ours'),
+    el('p', { class: 'eyebrow' }, '— 発明の交配実験室 —'),
+    heroTitleRow,
     el('p', { class: 'copy' }, '20年分の発明を、もう一度マッシュアップ。'),
   ),
 );
+
+// 画面端の浮遊ピクセルスプライト（参考画像の装飾）
+const sprite1 = pixelSprite(CRITTER, '#ef3b80', 2);
+sprite1.classList.add('sprite', 's1');
+const sprite2 = pixelSprite(CRITTER, '#00a0c8', 1);
+sprite2.classList.add('sprite', 's2');
+wrap.append(sprite1, sprite2);
 
 // 注意書き
 wrap.append(
@@ -82,20 +165,23 @@ wrap.append(
   ),
 );
 
+// サンプル表示中かどうか（owner/repo設定とは独立した条件）
+if (works.some((w) => w.sample) || children.some((c) => c.sample)) {
+  wrap.append(
+    el(
+      'div',
+      { class: 'notice warn' },
+      'ProtoPedia APIは未接続のため、現在は開発用サンプルデータを表示しています（[SAMPLE] 表記・実在の作品ではありません）。',
+    ),
+  );
+}
+
 if (!repoCfg) {
   wrap.append(
     el(
       'div',
       { class: 'notice error' },
-      'GitHub owner/repo が未設定です。.env.example を .env にコピーして VITE_GITHUB_OWNER / VITE_GITHUB_REPO を設定してください（交配申請リンクは設定後に有効になります）。',
-    ),
-  );
-} else {
-  wrap.append(
-    el(
-      'div',
-      { class: 'notice warn' },
-      'ProtoPedia APIは未接続のため、現在は開発用サンプル作品を表示しています（[SAMPLE] 表記）。',
+      'GitHub owner/repo が未設定です。.env.example を .env にコピーして VITE_GITHUB_OWNER / VITE_GITHUB_REPO を設定してください（交配申請リンクは設定後に有効になります）。Actions では GITHUB_REPOSITORY から自動設定されます。',
     ),
   );
 }
@@ -236,9 +322,16 @@ wrap.append(listSection);
 // --- 家系図 -----------------------------------------------------------------
 
 const pedSection = el('section', {}, el('h2', {}, '家系図'));
+// 色だけに依存させない: 凡例 + 破線/実線の形アクセントで区別する
+const legend = el(
+  'div',
+  { class: 'pedigree-legend' },
+  el('span', { class: 'key' }, el('span', { class: 'swatch proto' }), 'ProtoPediaの元作品（実線・第0世代）'),
+  el('span', { class: 'key' }, el('span', { class: 'swatch child' }), 'AIが生んだ子作品（破線・未実装アイデア）'),
+);
 const pedScroll = el('div', { class: 'pedigree-scroll' });
 const detailBox = el('div', { class: 'detail' }, el('p', { class: 'empty' }, 'ノードをクリックすると詳細を表示します。'));
-pedSection.append(pedScroll, detailBox);
+pedSection.append(legend, pedScroll, detailBox);
 wrap.append(pedSection);
 
 interface LayoutNode {
@@ -248,9 +341,28 @@ interface LayoutNode {
   gen: number;
 }
 
-const NODE_W = 210;
+const NODE_W = 240;
 const NODE_H = 44;
-const COL_W = 270;
+const COL_W = 300;
+const NODE_FONT = 13;
+
+/** フォント幅の概算（DotGothic16想定: 全角 = fontSize、半角 ≈ 0.62 × fontSize）。 */
+function estTextWidth(s: string, fontSize = NODE_FONT): number {
+  let w = 0;
+  for (const ch of s) w += (ch.codePointAt(0) ?? 0) < 0x80 ? fontSize * 0.62 : fontSize;
+  return w;
+}
+
+/** ノード枠に収まるよう文字単位で切り詰める（固定文字数ではなく幅で判定）。 */
+function truncateToWidth(s: string, maxWidth: number, fontSize = NODE_FONT): string {
+  if (estTextWidth(s, fontSize) <= maxWidth) return s;
+  let out = '';
+  for (const ch of s) {
+    if (estTextWidth(out + ch + '…', fontSize) > maxWidth) break;
+    out += ch;
+  }
+  return `${out}…`;
+}
 const ROW_H = 76;
 
 const edges: [string, string][] = [];
@@ -315,19 +427,30 @@ function renderPedigree(): void {
     if (!node) continue;
     const g = document.createElementNS(svgNS, 'g');
     g.setAttribute('class', `node ${isOffspring(node) ? 'child' : 'proto'}`);
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', `${node.title}（${n.id}）`);
     const rect = document.createElementNS(svgNS, 'rect');
     rect.setAttribute('x', String(n.x));
     rect.setAttribute('y', String(n.y));
     rect.setAttribute('width', String(NODE_W));
     rect.setAttribute('height', String(NODE_H));
-    rect.setAttribute('rx', '8');
+    // 角丸なし＝ドット絵矩形
+    const hoverTitle = document.createElementNS(svgNS, 'title');
+    hoverTitle.textContent = `${node.title} — ${node.summary}`;
     const text = document.createElementNS(svgNS, 'text');
-    const title = node.title.length > 22 ? `${node.title.slice(0, 21)}…` : node.title;
+    const title = truncateToWidth(node.title, NODE_W - 24);
     text.setAttribute('x', String(n.x + 12));
     text.setAttribute('y', String(n.y + NODE_H / 2 + 4));
     text.textContent = title;
-    g.append(rect, text);
+    g.append(rect, hoverTitle, text);
     g.addEventListener('click', () => selectNode(n.id));
+    g.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectNode(n.id);
+      }
+    });
     svg.append(g);
   }
 

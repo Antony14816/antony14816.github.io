@@ -60,6 +60,15 @@ mode: fusion
 - 親Aと親Bは別のID、許可されたID形式（`protopedia:<数字>` / `mashup:<数字>`）のみ。
 - 不正な入力はAIを呼ばずに理由をコメントします。
 
+## デザイン（ドット絵風ダークテーマ）
+
+参考画像をもとに、ニアバック + ピンクアクセント + ピクセル装飾のレトロWeb調。
+
+- **フォント**: 見出し・本文は [DotGothic16](https://fonts.google.com/specimen/DotGothic16)、ロゴは [Press+2P](https://fonts.google.com/specimen/Press+Start+2P)（**Google Fonts CDN への外部接続あり**。届かない環境では等幅フォントにフォールバック）。
+- **家系図の配色は dataviz 手順で検証済み**: surface `#15121c` / 元作品 `#00a0c8`（実線）/ 子作品 `#ef3b80`（破線）— ライトネス帯・彩度下限・CVD分離・通常視覚・コントラストの全チェックPASS。**色だけに依存させない**ため凡例 + 線種（実線/破線）で二重化している。勝手に色を替えない。
+- **装飾**: CSSグリッド背景、パネル四隅のL字ブラケット、ハードシャドウ、`▸` 見出しマーカー、SVGピクセル生き物スプライト（`steps()` 点滅、`prefers-reduced-motion` で停止）。
+- **スクリーンショット確認**: `npm run build && npx vite preview --port 4173` を起動してから `npm run screenshot`（`tmp/` に出力。初回のみ `npx playwright install chromium` と `install-deps` が必要）。
+
 ## ID名前空間の決定事項
 
 - ProtoPedia作品: `protopedia:<数字>`（第0世代）
