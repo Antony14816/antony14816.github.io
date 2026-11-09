@@ -27,7 +27,7 @@ const offspring = (rawOffspring as unknown as Offspring[]).slice();
 const sampleWorks = (sampleWorksJson as { works: ProtopediaWork[] }).works;
 const sampleOffspring = (rawSampleOffspring as unknown as Offspring[]).slice();
 
-// 毎時の交配候補（data/current-candidates.json。Actions「Rotate candidates」が毎時更新）。
+// 毎時の配合候補（data/current-candidates.json。Actions「Rotate candidates」が毎時更新）。
 // ブラウザからProtoPedia APIは呼ばない。ページ再読み込みで候補は変わらない。
 // 形が想定外なら開発用サンプルに落とし、[SAMPLE] 表記で本番と明確に区別する。
 const candidatesFile: CandidatesFile | null = isCandidatesFile(rawCandidates)
@@ -38,7 +38,7 @@ const candidates: ProtopediaWork[] = usingSampleCandidates
   ? sampleWorks
   : candidatesFile.candidates;
 
-// 本番データが0件の間はサンプル子作品も表示する（家系図が空にならないように。
+// 本番データが0件の間はサンプル子作品も表示する（系譜図が空にならないように。
 // 各データは sample フラグ・[SAMPLE]表記つきで本番と明確に区別される）。
 const showSampleOffspring = offspring.length === 0;
 const children: Offspring[] = showSampleOffspring ? sampleOffspring : offspring;
@@ -67,7 +67,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-// 家系図の完整性: サンプル子作品の親作品が候補カードに入っていない場合も、
+// 系譜図の完整性: サンプル子作品の親作品が候補カードに入っていない場合も、
 // 系譜として描けるよう参照だけ追加する（候補カードには表示しない）。
 const candidateIds = new Set(candidates.map((c) => c.id));
 const supportWorks = sampleWorks.filter((w) => !candidateIds.has(w.id));
@@ -162,7 +162,7 @@ themeBtn.addEventListener('click', () => {
 const heroLeft = el(
   'div',
   {},
-  el('p', { class: 'eyebrow' }, '— 16bit 交配研究所 —'),
+  el('p', { class: 'eyebrow' }, '— 16bit 配合研究所 —'),
   el('div', { class: 'hero-title-row' }, logoSprite(), el('h1', {}, 'Mashup Ours')),
   el('p', { class: 'copy' }, '20年分の発明を、もう一度マッシュアップ。'),
 );
@@ -181,7 +181,7 @@ const greetLead = el('p', { class: 'greet-lead' }, observeView('nothing').greeti
 const greetBody = el(
   'p',
   {},
-  '案内は 伴野博士（左）と ひげだるま博士（右）。GitHubアカウントがあれば誰でも申請できます（閲覧は不要）。生成結果はすべてAIが考えた未実装のアイデアです。',
+  '2つの発明を選んで配合すると、AIがあたらしい発明案を考えて示します。申し込みにはGitHubアカウントが要ります（閲覧はどなたでもOK）。生成されるのはすべて未実装のアイデアです。',
 );
 wrap.append(
   el(
@@ -200,8 +200,8 @@ wrap.append(
     'div',
     { class: 'memo window' },
     el('div', { class: 'titlebar' }, el('span', {}, '所長のメモ')),
-    el('p', {}, '今時間の候補から2つ選んで「交配を申請」すると、GitHub Issueが開きます。'),
-    el('p', {}, '生成は1時間に1枠。すべてAIが考えた未実装のアイデアです。'),
+    el('p', {}, '1時間ごとに新しい発明候補が届くよ！2つえらんで「配合を申し込む」と、GitHub Issueの申し込み画面が開きます。'),
+    el('p', {}, '配合は1時間に最大1件。この組み合わせ、何が生まれるんだろう？ 生成されるのはすべてAIが考えた未実装のアイデアです。'),
   ),
 );
 
@@ -232,7 +232,7 @@ if (children.some((c) => c.sample)) {
     el(
       'div',
       { class: 'notice warn window' },
-      '子作品がまだ0件のため、「最近誕生した発明」と「家系図」には開発用サンプルを表示しています（[SAMPLE] 表記・実在の生成結果ではありません）。',
+      '子作品がまだ0件のため、「最近誕生した発明」と「発明の系譜図」には開発用サンプルを表示しています（[SAMPLE] 表記・実在の生成結果ではありません）。',
     ),
   );
 }
@@ -242,13 +242,13 @@ if (!repoCfg) {
     el(
       'div',
       { class: 'notice error window' },
-      'GitHub owner/repo が未設定です。.env.example を .env にコピーして VITE_GITHUB_OWNER / VITE_GITHUB_REPO を設定してください（交配申請リンクは設定後に有効になります）。Actions では GITHUB_REPOSITORY から自動設定されます。',
+      'GitHub owner/repo が未設定です。.env.example を .env にコピーして VITE_GITHUB_OWNER / VITE_GITHUB_REPO を設定してください（配合の申し込みリンクは設定後に有効になります）。Actions では GITHUB_REPOSITORY から自動設定されます。',
     ),
   );
 }
 
 // ---------------------------------------------------------------------------
-// ① 今時間の交配候補（毎時6件・全ユーザー共通。追加開発指示 §2/§3）
+// ① 今時間の配合候補（毎時6件・全ユーザー共通。追加開発指示 §2/§3）
 // ---------------------------------------------------------------------------
 
 // 完成イメージ（tmp/CleanShot 2026-11-09 at 21.43.19.png）準拠:
@@ -259,13 +259,13 @@ const stateBadge = el('span', { class: 'chip' });
 const candMeta = el('div', { class: 'cand-meta' });
 const grid = el('div', { class: 'candidates' });
 
-// --- 親選択の案内（追加指示 §5: 親選択=伴野博士） --------------------------
+// --- 親選択の案内（追加指示 §5: 親選択=案内役の博士） --------------------------
 // 状態は「選択数」だけを反映する。success/thinking は実際の処理状態のときに
 // だけ使う（ここでは触らない）。
 const SELECT_MSGS: Record<number, string> = {
-  0: '候補から2つえらんでね。「Aにする」「Bにする」のボタンで選べます。',
-  1: 'あと1つ！もう1つえらべば交配を申請できます。',
-  2: '2つえらべました。下の「交配を申請」を押してね。',
+  0: 'この候補から、気になる発明を2つ選ぶのじゃ！「Aにする」「Bにする」のボタンでえらべます。',
+  1: 'あと1つ！もう1つの発明を選んで配合しよう！',
+  2: 'よし、2つえらべた！下の「配合を申し込む」を押すのじゃ！',
 };
 const bannoGuide = createCharacter('banno', { message: SELECT_MSGS[0] });
 
@@ -449,10 +449,10 @@ candSection.append(
 wrap.append(candSection);
 
 // ---------------------------------------------------------------------------
-// ② 交配マシン（選択状態・申請・稼働状況・交配待ち）
+// ② 配合マシン（選択状態・申請・稼働状況・配合待ち）
 // ---------------------------------------------------------------------------
 
-const machineSection = el('section', {}, el('h2', {}, '交配マシン'));
+const machineSection = el('section', {}, el('h2', {}, '発明配合マシン'));
 
 const statusA = el('span', { class: 'status-val empty' }, '（未選択）');
 const statusB = el('span', { class: 'status-val empty' }, '（未選択）');
@@ -464,7 +464,7 @@ const statusRow = el(
   el('div', { class: 'side' }, el('span', { class: 'side-label' }, '親B'), statusB),
 );
 
-// 稼働状況と交配待ち（DESIGN.md §1: ファーストビュー圏で分かるように）
+// 稼働状況と配合待ち（DESIGN.md §1: ファーストビュー圏で分かるように）
 const nowSlot = slotKey(new Date());
 const slotTaken = children.some((c) => c.slot === nowSlot && !c.sample);
 const statusNote = el(
@@ -473,16 +473,16 @@ const statusNote = el(
   el(
     'div',
     {},
-    '現在の交配枠（UTC）: ',
+    '現在の配合枠（UTC）: ',
     el('span', { class: 'value' }, nowSlot),
     slotTaken ? ' — この枠はすでに1件生成済みです。' : ' — この枠はまだ空きがあります。',
   ),
-  el('div', {}, '1時間に1枠は全ユーザー共有です（ユーザーごとに毎時1回ではありません）。'),
+  el('div', {}, '配合は1時間に最大1件、全ユーザー共有です（ユーザーごとに毎時1回ではありません）。候補の更新とは別の処理です。'),
   repoCfg
     ? el(
         'div',
         {},
-        '交配申請中の組み合わせは公開Issueで確認できます: ',
+        '配合待ちの申し込みは公開Issueで確認できます: ',
         el(
           'a',
           {
@@ -490,13 +490,13 @@ const statusNote = el(
             target: '_blank',
             rel: 'noopener',
           },
-          '交配待ちのIssue一覧 →',
+          '配合待ちのIssue一覧 →',
         ),
       )
-    : el('div', { class: 'empty' }, '交配待ちのIssue一覧はリポジトリ設定後に表示されます。'),
+    : el('div', { class: 'empty' }, '配合待ちのIssue一覧はリポジトリ設定後に表示されます。'),
 );
 
-const breedBtn = el('button', { class: 'breed', type: 'button' }, '交配を申請') as HTMLButtonElement;
+const breedBtn = el('button', { class: 'breed', type: 'button' }, '配合を申し込む') as HTMLButtonElement;
 const hint = el('span', { class: 'hint' });
 const actions = el('div', { class: 'actions' }, breedBtn, hint);
 
@@ -505,10 +505,10 @@ const machineHint = el(
   { class: 'hint catalog' },
   usingSampleCandidates
     ? '候補は開発用サンプルです（実在の作品ではありません）。'
-    : '候補カードの「Aにする」「Bにする」で2つ選んで申請できます。',
+    : '候補カードの「Aにする」「Bにする」で、気になる発明を2つえらべます。',
 );
 
-// --- 交配マシンの博士（追加指示 §5: 交配申請=ひげだるま博士） --------------
+// --- 発明配合マシンの博士（追加指示 §5: 申し込み・実験結果の案内役） --------
 // どの状態を出すかは applyView（申請フロー）/ observeView（公開データ観測）が決める。
 const higeMachine = createCharacter('higedaruma', { message: applyView('idle').message });
 
@@ -527,7 +527,7 @@ const machine = el(
   el(
     'div',
     { class: 'titlebar' },
-    el('span', {}, '交配マシン'),
+    el('span', {}, '発明配合マシン'),
     el(
       'span',
       { class: 'lamps', 'aria-hidden': 'true' },
@@ -562,14 +562,14 @@ function refreshBreedButton(): void {
   if (!pair) {
     hint.textContent =
       pickA && pickB && pickA === pickB
-        ? '親Aと親Bは別の作品を選んでください。'
-        : '候補カードから2つ選ぶとGitHub Issueの作成画面が開きます。';
+        ? '親Aと親Bは別の発明を選んでください。'
+        : '発明を2つえらぶと、GitHub Issueの申し込み画面が開きます。';
   } else if (!repoCfg) {
-    hint.textContent = 'owner/repo未設定のため申請できません（上の案内を参照）。';
+    hint.textContent = 'owner/repo未設定のため申し込めません（上の案内を参照）。';
   } else {
     hint.textContent = `${pair[0]} × ${pair[1]}${
       candidatesFile ? `（候補スロット ${candidatesFile.slot}）` : ''
-    } の組み合わせで申請します。`;
+    } の組み合わせで配合を申し込みます。`;
   }
 }
 
@@ -706,7 +706,7 @@ breedBtn.addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ③ 最近誕生した発明（直近の交配結果）
+// ③ 最近誕生した発明（直近の配合結果）
 // ---------------------------------------------------------------------------
 
 const listSection = el(
@@ -755,25 +755,43 @@ if (sorted.length === 0) {
 listSection.append(list);
 wrap.append(listSection);
 
-// --- 家系図 -----------------------------------------------------------------
+// --- 系譜図 -----------------------------------------------------------------
 
-const pedSection = el('section', {}, el('h2', {}, '家系図'));
+const pedSection = el(
+  'section',
+  {},
+  el('h2', {}, '発明の系譜図'),
+  el(
+    'p',
+    { class: 'ped-desc hint' },
+    'どの発明から、どんな発明が生まれたのか。配合を重ねて広がっていく、発明のつながりをたどってみよう。',
+  ),
+);
 // 色だけに依存させない: 凡例 + 破線/実線の形アクセントで区別する
-// 追加指示 §5: 家系図はキャラの補助表示（完全装飾 = aria-hidden。character.ts が付与）
+// 追加指示 §5: 系譜図はキャラの補助表示（完全装飾 = aria-hidden。character.ts が付与）
 const pedChar = createCharacter('banno', { decorative: true });
 pedChar.el.classList.add('ped-char');
 const legend = el(
   'div',
   { class: 'pedigree-legend' },
-  el('span', { class: 'key' }, el('span', { class: 'swatch proto' }), 'ProtoPediaの元作品（実線・第0世代）'),
-  el('span', { class: 'key' }, el('span', { class: 'swatch child' }), 'AIが生んだ子作品（破線・未実装アイデア）'),
-  el('span', { class: 'scroll-hint' }, '横スクロールで系譜をたどれます'),
+  el('span', { class: 'key' }, el('span', { class: 'swatch proto' }), 'ProtoPedia作品（実線・第0世代）'),
+  el('span', { class: 'key' }, el('span', { class: 'swatch child' }), 'AI生成アイデア（破線・未実装）'),
+  el('span', { class: 'scroll-hint' }, '横スクロールで発明のつながりをたどれます'),
   pedChar.el,
 );
 const pedScroll = el('div', { class: 'pedigree-scroll window' });
-const detailBox = el('div', { class: 'detail window' }, el('p', { class: 'empty' }, 'ノードをクリックすると詳細を表示します。'));
+const detailBox = el('div', { class: 'detail window' }, el('p', { class: 'empty' }, '発明をクリックすると、どんな発明から生まれたのか見られるぞ。'));
 pedSection.append(legend, pedScroll, detailBox);
 wrap.append(pedSection);
+
+// 非公式プロジェクトである旨を一度だけ明示（追加指示 §4。注意書きは画面全体に繰り返さない）
+wrap.append(
+  el(
+    'footer',
+    { class: 'site-foot hint' },
+    'Mashup Oursは個人制作の非公式プロジェクトです。ProtoPediaおよびヒーローズ・リーグの公式サービスではありません。',
+  ),
+);
 
 interface LayoutNode {
   id: string;
@@ -956,7 +974,7 @@ function renderDetail(id: string): void {
     }
     add('生成日時', `${node.createdAt} ・ モデル: ${node.model}`);
   } else {
-    add('世代', '第0世代（ProtoPediaの元作品）');
+    add('世代', '第0世代（ProtoPedia作品）');
     if (node.authors && node.authors.length > 0) add('作者', node.authors.join(' / '));
     if (node.tags && node.tags.length > 0) add('タグ', node.tags.join(' / '));
     if (node.licenseType) add('ライセンス', node.licenseType);
@@ -1002,7 +1020,7 @@ if (canWatch && repoCfg) {
   }, OBSERVE_INTERVAL_MS);
 }
 
-// ?id= ディープリンク（/ideas の「家系図で詳細を見る」から戻る用 / issue #8）。
+// ?id= ディープリンク（/ideas の「系譜図で詳細を見る」から戻る用 / issue #8）。
 // 無効・未知のIDは無視して初期表示のまま。
 const initialId = new URLSearchParams(window.location.search).get('id');
 if (initialId && nodeById.has(initialId)) selectNode(initialId);

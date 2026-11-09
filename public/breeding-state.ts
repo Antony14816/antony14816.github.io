@@ -1,5 +1,5 @@
 /**
- * 交配フローの状態判定（issue #11 / 追加指示 §3・§5・§7・最重要事項）。
+ * 配合フローの状態判定（issue #11 / 追加指示 §3・§5・§7・最重要事項）。
  *
  * すべて純関数。ネットワークもDOMも持たない（取得は github-watch.ts、
  * 表示は character.ts、接続は main.ts）。
@@ -78,24 +78,24 @@ export function applyView(phase: ApplyPhase): CharView {
       return {
         state: 'idle',
         message:
-          'Issue作成画面を開きました。内容を「送信」して初めて申請完了です（開いただけでは申請になりません）。',
+          '申し込み画面を開きました。内容を「送信」して初めて配合の申し込み完了です（開いただけでは申請になりません）。',
       };
     case 'confirmed':
       return {
         state: 'success',
-        message: '申請を確認できました！次の交配枠で実験を待ってください。',
+        message: 'よし！配合の申し込みを受け付けたぞ！次の配合タイムで実験を待つのじゃ。',
       };
     case 'unconfirmed':
       return {
         state: 'idle',
         message:
-          'まだ申請を確認できません。Issueを「送信」しましたか？ 送信済みなら少し待ってから再読み込みしてください。',
+          'まだ申し込みを確認できません。Issueを「送信」しましたか？ 送信済みなら少し待ってから再読み込みしてください。',
       };
     case 'idle':
       return {
         state: 'idle',
         message:
-          '親を2つえらんで「交配を申請」を押すと、実験の申請（GitHub Issue）が始まります。',
+          '発明を2つえらんで「配合を申し込む」を押すと、申し込み（GitHub Issue）が始まります。',
       };
   }
 }
@@ -155,7 +155,7 @@ export function parseBreedIssueTitle(title: string): Pair | null {
 }
 
 export interface ObserveViews {
-  /** 交配マシンのひげだるま博士 */
+  /** 配合マシンの実験担当の博士 */
   higedaruma: CharView;
   /** トップの挨拶ウィンドウ（共通セリフ） */
   greeting: string;
@@ -167,32 +167,31 @@ export function observeView(phase: ObservePhase): ObserveViews {
   switch (phase) {
     case 'fresh':
       return {
-        higedaruma: { state: 'celebration', message: 'あた新しい はつめいが うまれた！' },
-        greeting: 'あた新しい はつめいが うまれた！',
+        higedaruma: { state: 'celebration', message: 'なんと！あた新しい発明が誕生したぞ！' },
+        greeting: 'なんと！あた新しい発明が誕生したぞ！',
         bothState: 'celebration',
       };
     case 'generating':
       return {
-        higedaruma: { state: 'thinking', message: '生成中: AIが新しい発明アイデアを考えています。' },
+        higedaruma: { state: 'thinking', message: '生成中: AIがあたらしい発明を考えています。' },
         greeting:
-          '交配の実験中です。AIが新しい発明アイデアを生成しています。しばらくお待ちください。',
+          '配合の実験中です。AIがあたらしい発明案を生成しています。しばらくお待ちください。',
         bothState: 'idle',
       };
     case 'queued':
       return {
         higedaruma: {
           state: 'idle',
-          message: '実験待ち: 次の交配枠まで、しばらくお待ちください。',
+          message: '配合待ち: 次の実験が始まるまで、もう少しじゃ！',
         },
         greeting:
-          '交配の実験待ちがあります。次の交配枠（1時間に1枠・全ユーザー共有）までお待ちください。',
+          '配合待ちの発明があります。次の配合タイム（1時間に最大1件・全員で共有）までお待ちください。',
         bothState: 'idle',
       };
     case 'nothing':
       return {
         higedaruma: applyView('idle'),
-        greeting:
-          'ようこそ、16bit交配研究所へ。2つの発明を交配させて、あたらしいアイデアを生み出します。',
+        greeting: 'ようこそ！ここは発明を配合する研究所じゃ！',
         bothState: 'idle',
       };
   }

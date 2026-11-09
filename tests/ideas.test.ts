@@ -27,7 +27,7 @@ it('0件のときは空状態と申請誘導を表示する', () => {
   const host = build([]);
   const text = host.textContent ?? '';
   expect(text).toContain('まだアイデアは生まれていません');
-  expect(text).toContain('交配を申請');
+  expect(text).toContain('配合を申し込む');
   expect(text).toContain('全0件');
   expect(host.querySelectorAll('.idea-item').length).toBe(0);
   // 戻るリンクはトップ

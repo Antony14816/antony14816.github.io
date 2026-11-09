@@ -249,7 +249,7 @@ export function normalizeWork(raw: unknown): ProtopediaWork | null {
 
   // freeComment（詳細説明）は保存しない（仕様書§7「詳細説明を無制限に保存せず」）。
   // summary が空のときだけ冒頭を概要として使う（上の summary で処理済み）。
-  // 交配時に入力が必要な場合はワーカーが prototypeId でAPIから直接取得する（§6.2）。
+  // 配合時に入力が必要な場合はワーカーが prototypeId でAPIから直接取得する（§6.2）。
 
   return work;
 }

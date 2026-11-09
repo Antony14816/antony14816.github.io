@@ -52,7 +52,7 @@ it('セリフがないとき: role=img + aria-label で名前と状態を1回だ
   );
   // 状態が変わったらラベルも追随する
   c.setState('success');
-  expect(c.el.getAttribute('aria-label')).toContain('によろこぶ顔');
+  expect(c.el.getAttribute('aria-label')).toContain('よろこぶ顔');
 });
 
 it('セリフを後から付けると role=img は外れ、消すと戻る', () => {
@@ -65,7 +65,7 @@ it('セリフを後から付けると role=img は外れ、消すと戻る', () 
   expect(c.el.getAttribute('role')).toBe('img');
 });
 
-it('装飾指定は完全に aria-hidden（家系図の補助表示など）', () => {
+it('装飾指定は完全に aria-hidden（系譜図の補助表示など）', () => {
   const c = createCharacter('banno', { decorative: true });
   expect(c.el.getAttribute('aria-hidden')).toBe('true');
   expect(c.el.hasAttribute('role')).toBe(false);

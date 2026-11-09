@@ -27,7 +27,7 @@ export interface ProtopediaWork {
   /** 技術構成（systemDescription）。生成AIへの参考資料として使う（長さ上限つき）。 */
   systemDescription?: string;
   // 注: 詳細説明（freeComment）は保存しない（仕様書§7「詳細説明を無制限に保存せず」）。
-  // 交配時に入力が必要な場合はワーカーが prototypeId でAPIから直接取得する（§6.2）。
+  // 配合時に入力が必要な場合はワーカーが prototypeId でAPIから直接取得する（§6.2）。
 }
 
 /**

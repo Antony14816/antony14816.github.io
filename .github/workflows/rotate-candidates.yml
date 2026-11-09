@@ -1,4 +1,4 @@
-# 毎時の交配候補の更新（追加開発指示 §7）。
+# 毎時の配合候補の更新（追加開発指示 §7）。
 # 保存済みの作品データからスロット単位で最大6件を決定的に選出し、
 # data/current-candidates.json を更新する。ProtoPedia APIは呼ばない（トークン不要）。
 # - 同じスロットなら常に同じ候補（再実行しても結果は同じ）
@@ -57,5 +57,5 @@ jobs:
             echo "変更なし"
             exit 0
           fi
-          git commit -m "chore(data): 交配候補を更新 $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git commit -m "chore(data): 配合候補を更新 $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push

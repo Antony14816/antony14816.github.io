@@ -24,7 +24,7 @@ export function repoConfigFromEnv(
   return { owner, repo };
 }
 
-/** 交配申請リンクに含める任意フィールド（追加開発指示 §8: 元作品URL・候補スロット）。 */
+/** 配合申請リンクに含める任意フィールド（追加開発指示 §8: 元作品URL・候補スロット）。 */
 export interface IssueLinkOptions {
   mode?: string;
   /** 申請時の候補スロット（UTC "YYYY-MM-DDTHH"） */
@@ -51,7 +51,7 @@ export function newIssueUrl(
   lines.push(
     '',
     // コメント欄のヒント（issue #7）。HTMLコメントなので投稿後は非表示、編集画面でのみ見える。
-    `<!-- 任意: comment: の後に1行だけで自由記述を追加できます（最大${MAX_COMMENT_LENGTH}字・交配の動機など） -->`,
+    `<!-- 任意: comment: の後に1行だけで自由記述を追加できます（最大${MAX_COMMENT_LENGTH}字・配合の動機など） -->`,
     '<!-- mashup-ours: generated link -->',
   );
   const params = new URLSearchParams({ title, body: lines.join('\n') });

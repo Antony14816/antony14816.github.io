@@ -25,14 +25,16 @@ import higedarumaCelebration from './assets/characters/higedaruma/celebration.pn
 export type CharacterName = 'banno' | 'higedaruma';
 export type CharacterState = 'idle' | 'success' | 'thinking' | 'celebration';
 
+// 画面には名前を出さない（追加指示 §3: 基本は画像とセリフだけで成立させる。
+// role=img の読み上げに必要なときだけ、実名を含まない役割名で呼ぶ）。
 export const CHARACTER_LABEL: Record<CharacterName, string> = {
-  banno: '伴野博士',
-  higedaruma: 'ひげだるま博士',
+  banno: '案内役の博士',
+  higedaruma: '実験担当の博士',
 };
 
 const STATE_LABEL: Record<CharacterState, string> = {
   idle: '通常',
-  success: '申請完了によろこぶ顔',
+  success: '申し込みを受けてよろこぶ顔',
   thinking: '実験中・考え中の顔',
   celebration: '大よろこびの顔',
 };
@@ -56,7 +58,7 @@ export interface CharacterOptions {
   state?: CharacterState;
   /** セリフ。null/未指定なら role=img + aria-label で状態を1回だけ読む */
   message?: string | null;
-  /** true なら完全な装飾（aria-hidden。家系図の補助表示など） */
+  /** true なら完全な装飾（aria-hidden。系譜図の補助表示など） */
   decorative?: boolean;
 }
 

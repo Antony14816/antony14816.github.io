@@ -1,10 +1,10 @@
 /* ==========================================================================
-   Mashup Ours — 16bit交配研究所テーマ（DESIGN.md 準拠）
+   Mashup Ours — 16bit配合研究所テーマ（DESIGN.md 準拠）
 
    - デザイントークンは CSS カスタムプロパティで集中管理（§8）
    - ダーク / ライトを切り替え可能。既定は OS 設定、localStorage で永続化
    - ウィンドウ = 太い外枠 + 内側の細い線 + 右下のハードシャドウ（§3.4）
-   - 家系図の系列色は validate_palette.js で両テーマ・両面PASS済み:
+   - 系譜図の系列色は validate_palette.js で両テーマ・両面PASS済み:
        ダーク: #12A87D / #D96B4F on #303C51
        ライト: #0F9D72 / #C15733 on #FFFCF0
      CVDは6〜8のWARN帯 → 凡例 + 実線/破線 + ノードラベルで二重化（§5.5）
@@ -359,7 +359,7 @@ section > h2::before {
   color: var(--action);
 }
 
-/* --- 交配マシン（親作品選択） --------------------------------------------- */
+/* --- 配合マシン（親作品選択） --------------------------------------------- */
 
 .machine {
   padding-bottom: 18px;
@@ -468,7 +468,7 @@ button.breed:disabled {
   color: var(--text);
 }
 
-/* --- 本日の発明研究所（交配候補パネル / 完成イメージ準拠） ------------------ */
+/* --- 本日の発明研究所（配合候補パネル / 完成イメージ準拠） ------------------ */
 
 .cand-section {
   margin-top: 30px;
@@ -862,7 +862,7 @@ ul.offspring .hint {
   color: var(--badge-sample-ink);
 }
 
-/* --- 家系図 ---------------------------------------------------------------- */
+/* --- 系譜図 ---------------------------------------------------------------- */
 
 .pedigree-legend {
   display: flex;
@@ -1153,6 +1153,25 @@ li.idea-item {
   font-size: 0.85rem;
 }
 
+.ideas-foot .foot-note {
+  margin-top: 6px;
+  color: var(--text-dim);
+}
+
+/* --- 系譜図の説明・フッター（追加指示 §4/§5） ------------------------------ */
+
+.ped-desc {
+  margin: 6px 0 0;
+}
+
+.site-foot {
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 2px solid var(--line);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
 /* --- 博士キャラクター（issue #11 追加指示 §5〜§8） ------------------------- */
 
 .char {
@@ -1296,17 +1315,17 @@ li.idea-item {
   color: var(--text);
 }
 
-/* 親選択パネルの案内（伴野博士） */
+/* 親選択パネルの案内（案内役の博士） */
 .cand-guide {
   margin-top: 16px;
 }
 
-/* 交配マシン内（ひげだるま博士） */
+/* 配合マシン内（実験担当の博士） */
 .machine-char {
   margin-top: 16px;
 }
 
-/* 家系図の補助表示（完全な装飾: aria-hidden は character.ts が付与） */
+/* 系譜図の補助表示（完全な装飾: aria-hidden は character.ts が付与） */
 .ped-char {
   margin-left: auto;
 }

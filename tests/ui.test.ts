@@ -86,11 +86,11 @@ it('候補スロット・次回更新予定・全ユーザー共有の案内が�
   const text = document.body.textContent ?? '';
   expect(text).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}/); // スロット（UTC）
   expect(text).toContain('次回の候補更新予定');
-  expect(text).toContain('1時間に1枠は全ユーザー共有');
+  expect(text).toContain('1時間に最大1件、全ユーザー共有');
   expect(text).toContain('ページを再読み込みしても候補は変わりません');
 });
 
-it('選択前は交配申請ボタンが無効', async () => {
+it('選択前は配合申請ボタンが無効', async () => {
   const { breedButton, statusVals } = await boot();
   expect(breedButton().disabled).toBe(true);
   expect(statusVals()[0].textContent).toContain('未選択');
@@ -128,7 +128,7 @@ it('異なる2作品を選ぶと申請ボタンの条件が揃う', async () => 
   // owner/repo設定時は有効、未設定時は案内付きで無効のまま
   if (repoConfigured()) {
     expect(breedButton().disabled).toBe(false);
-    expect(actionHint().textContent).toContain('の組み合わせで申請します');
+    expect(actionHint().textContent).toContain('の組み合わせで配合を申し込みます');
   } else {
     expect(breedButton().disabled).toBe(true);
     expect(actionHint().textContent).toContain('未設定');
@@ -175,13 +175,13 @@ it('Issue作成URLに親ID・元作品URL・slotが含まれる（設定済み�
   spy.mockRestore();
 });
 
-it('家系図SVGとノードが描画される（サンプル2世代）', async () => {
+it('系譜図SVGとノードが描画される（サンプル2世代）', async () => {
   await boot();
   const svg = document.querySelector('.pedigree-scroll svg');
   expect(svg).toBeTruthy();
   const nodes = document.querySelectorAll('.pedigree-scroll .node');
   // サンプル系譜に絡むノード: protopedia:9001/9002/9004 + mashup-000001/000002 = 5
-  // （系譜に未接続の protopedia:9003 は家系図に出さない）
+  // （系譜に未接続の protopedia:9003 は系譜図に出さない）
   expect(nodes.length).toBe(5);
   const edges = document.querySelectorAll('.pedigree-scroll .edge');
   expect(edges.length).toBe(4); // 各子に親2本 × 2子
@@ -207,7 +207,7 @@ it('子作品の行からも親を選びられる（行クリックの詳細表�
   expect(li!.classList.contains('is-a')).toBe(true);
   expect(statusVals()[0].textContent).not.toContain('未選択');
   // 行クリックによる詳細表示は発火しない（stopPropagation）
-  expect(document.querySelector('.detail')?.textContent ?? '').toContain('ノードをクリック');
+  expect(document.querySelector('.detail')?.textContent ?? '').toContain('発明をクリック');
 });
 
 it('HTMLとして未エスケープの外部入力が挿入されない（XSS）', async () => {
@@ -223,7 +223,7 @@ it('?id= ディープリンクで詳細を開く（/ideasからの復帰 / issue
   await boot();
   const detail = document.querySelector('.detail')?.textContent ?? '';
   expect(detail).toContain('継承した特徴'); // 子ノードの詳細が初期表示される
-  expect(detail).not.toContain('ノードをクリック');
+  expect(detail).not.toContain('発明をクリック');
   window.history.replaceState({}, '', '/'); // 後続テストに影響しないよう戻す
 });
 
@@ -250,21 +250,21 @@ it('トップに2人の博士が挨拶ウィンドウで表示される', async 
   expect((chars[0] as HTMLElement).dataset.char).toBe('banno');
   expect((chars[1] as HTMLElement).dataset.char).toBe('higedaruma');
   const lead = document.querySelector('.greet-lead')?.textContent ?? '';
-  expect(lead).toContain('16bit交配研究所');
+  expect(lead).toContain('配合する研究所');
 });
 
-it('親の選択数に伴野博士の案内が連動する（0→1→2）', async () => {
+it('親の選択数に案内役の博士の案内が連動する（0→1→2）', async () => {
   const { pickBtn } = await boot();
   const guideMsg = () =>
     document.querySelector('.cand-guide .char-msg')?.textContent ?? '';
-  expect(guideMsg()).toContain('2つえらんでね');
+  expect(guideMsg()).toContain('2つ選ぶのじゃ');
   pickBtn(0, 'a').click();
   expect(guideMsg()).toContain('あと1つ');
   pickBtn(1, 'b').click();
-  expect(guideMsg()).toContain('2つえらべました');
+  expect(guideMsg()).toContain('2つえらべた');
 });
 
-it('Issue作成画面を開いただけではひげだるま博士は success にしない（最重要事項）', async () => {
+it('Issue作成画面を開いただけでは実験担当の博士は success にしない（最重要事項）', async () => {
   const { pickBtn, breedButton } = await boot();
   const spy = vi.spyOn(window, 'open').mockReturnValue(null);
   pickBtn(0, 'a').click();
@@ -275,7 +275,7 @@ it('Issue作成画面を開いただけではひげだるま博士は success �
     expect(machineChar.dataset.state).not.toBe('success');
     expect(machineChar.dataset.state).toBe('idle'); // 開いただけ = 未完了のまま
     const msg = document.querySelector('.machine-char .char-msg')?.textContent ?? '';
-    expect(msg).toContain('Issue作成画面を開きました');
+    expect(msg).toContain('申し込み画面を開きました');
     expect(msg).toContain('送信');
     // テスト環境では実通信ポーリングを一切始めない
     expect(spy).toHaveBeenCalledTimes(1);
@@ -283,7 +283,7 @@ it('Issue作成画面を開いただけではひげだるま博士は success �
   spy.mockRestore();
 });
 
-it('家系図の博士は完全な装飾（aria-hidden・二重読み上げしない）', async () => {
+it('系譜図の博士は完全な装飾（aria-hidden・二重読み上げしない）', async () => {
   await boot();
   const pedChar = document.querySelector('.ped-char') as HTMLElement;
   expect(pedChar).toBeTruthy();

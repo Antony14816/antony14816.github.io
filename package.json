@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "20年分の発明を、もう一度マッシュアップ。ProtoPedia作品の交配から新しい発明アイデアを生み出すサービス",
+  "description": "20年分の発明を、もう一度マッシュアップ。ProtoPedia作品の配合から新しい発明アイデアを生み出すサービス",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

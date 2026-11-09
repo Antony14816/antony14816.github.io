@@ -121,7 +121,7 @@ function buildIdeaItem(
     el(
       'a',
       { class: 'idea-detail', href: `${ctx.base}?id=${encodeURIComponent(c.id)}` },
-      '家系図で詳細を見る →',
+      '系譜図で詳細を見る →',
     ),
   );
   if (ctx.repoCfg && c.sourceIssue > 0) {
@@ -206,10 +206,10 @@ export function buildIdeasPage(
         el(
           'div',
           {},
-          el('p', { class: 'eyebrow' }, '— 16bit 交配研究所 —'),
+          el('p', { class: 'eyebrow' }, '— 16bit 配合研究所 —'),
           el('h1', {}, '生み出されたアイデア'),
           el('p', { class: 'copy' }, 'AIが考えた未実装の発明アイデアを、すべてここに。'),
-          el('p', { class: 'ideas-back' }, el('a', { href: ctx.base }, '← 交配研究所へ戻る')),
+          el('p', { class: 'ideas-back' }, el('a', { href: ctx.base }, '← 研究所トップへ戻る')),
         ),
         themeBtn,
       ),
@@ -265,9 +265,9 @@ export function buildIdeasPage(
         el(
           'p',
           {},
-          '研究所トップで2つの作品を選び「交配を申請」すると、毎時1枠（全ユーザー共通）でAIが新しい発明案を考えます。',
+          '研究所トップで発明を2つえらんで「配合を申し込む」と、AIがあたらしい発明案を考えます。配合は1時間に最大1件（全員で共有）。',
         ),
-        el('p', {}, el('a', { href: ctx.base }, '交配研究所へ →')),
+        el('p', {}, el('a', { href: ctx.base }, '研究所トップへ →')),
       ),
     );
   } else {
@@ -281,8 +281,18 @@ export function buildIdeasPage(
     el(
       'footer',
       { class: 'ideas-foot hint' },
-      el('a', { href: ctx.base }, 'Mashup Ours トップへ'),
-      ' — 20年分の発明を、もう一度マッシュアップ。',
+      el(
+        'div',
+        {},
+        el('a', { href: ctx.base }, 'Mashup Ours トップへ'),
+        ' — 20年分の発明を、もう一度マッシュアップ。',
+      ),
+      // 非公式プロジェクトである旨（追加指示 §4）。このページで一度だけ。
+      el(
+        'div',
+        { class: 'foot-note' },
+        'Mashup Oursは個人制作の非公式プロジェクトです。ProtoPediaおよびヒーローズ・リーグの公式サービスではありません。',
+      ),
     ),
   );
 }

@@ -1,8 +1,8 @@
 /**
- * 交配フロー状態判定（issue #11 最重要事項: リアクションは実際の処理状態と連動）。
+ * 配合フロー状態判定（issue #11 最重要事項: リアクションは実際の処理状態と連動）。
  * - Issue作成画面を開いただけ ≠ 申請完了（success にしない）
  * - 申請完了は API が Issue（タイトル+本文の親ID行）を返したときだけ
- * - 実験待ち / 生成中 / 誕生 を区別し、sample サブセットで誕生判定を誤らせない
+ * - 配合待ち / 生成中 / 誕生 を区別し、sample サブセットで誕生判定を誤らせない
  */
 import { expect, it } from 'vitest';
 import type { Offspring } from '../lib/types.ts';
@@ -62,7 +62,7 @@ it('表示用タイトルの生成とパース（互いに往復する）', () =
   });
 });
 
-it('交配形式以外のタイトルは受け付けない / 長すぎるIDは拒否', () => {
+it('配合形式以外のタイトルは受け付けない / 長すぎるIDは拒否', () => {
   expect(parseBreedIssueTitle('Bug: something')).toBeNull();
   expect(parseBreedIssueTitle('[Breed] only-one')).toBeNull();
   expect(parseBreedIssueTitle(`[Breed] ${'a'.repeat(65)} x protopedia:1`)).toBeNull();
@@ -102,7 +102,7 @@ it('opening は success にしない（Issue作成画面を開いただけでは
 it('confirmed のみが success。unconfirmed は正直に未確認のまま', () => {
   expect(applyView('confirmed').state).toBe('success');
   expect(applyView('unconfirmed').state).toBe('idle');
-  expect(applyView('unconfirmed').message).toContain('まだ申請を確認できません');
+  expect(applyView('unconfirmed').message).toContain('まだ申し込みを確認できません');
   expect(applyView('idle').state).toBe('idle');
 });
 
@@ -158,7 +158,7 @@ it('generating: closed だが未公開（=ワーカー処理中）。queued=open
       nowMs,
     }),
   ).toBe('nothing');
-  // 交配形式でない Issue は観測に混ざらない
+  // 配合形式でない Issue は観測に混ざらない
   expect(
     observeBreeding({
       issues: [issue({ title: 'Bug report', state: 'open' })],
@@ -168,10 +168,10 @@ it('generating: closed だが未公開（=ワーカー処理中）。queued=open
   ).toBe('nothing');
 });
 
-it('observeView: 実験待ち / 生成中 / 誕生でセリフと状態が明確に違う', () => {
+it('observeView: 配合待ち / 生成中 / 誕生でセリフと状態が明確に違う', () => {
   const queued = observeView('queued');
   expect(queued.higedaruma.state).toBe('idle');
-  expect(queued.higedaruma.message).toContain('実験待ち');
+  expect(queued.higedaruma.message).toContain('配合待ち');
   expect(queued.bothState).toBe('idle');
 
   const generating = observeView('generating');
@@ -181,7 +181,7 @@ it('observeView: 実験待ち / 生成中 / 誕生でセリフと状態が明確
 
   const fresh = observeView('fresh');
   expect(fresh.higedaruma.state).toBe('celebration');
-  expect(fresh.greeting).toBe('あた新しい はつめいが うまれた！');
+  expect(fresh.greeting).toBe('なんと！あた新しい発明が誕生したぞ！');
   expect(fresh.bothState).toBe('celebration');
 
   expect(observeView('nothing').higedaruma.state).toBe('idle');
