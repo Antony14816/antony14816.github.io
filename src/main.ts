@@ -52,80 +52,56 @@ function isOffspring(n: ProtopediaWork | Offspring | undefined): n is Offspring 
   return !!n && 'sourceIssue' in n;
 }
 
-// --- ピクセルスプライト（SVG文字列マップから生成。画像アセット不要） --------
-
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** ASCIIマップからピクセルSVGを作る。'o' = 塗り, それ以外は空白。 */
-function pixelSprite(
-  rows: readonly string[],
-  color: string,
-  pixelSize = 1,
-): SVGSVGElement {
-  const w = Math.max(...rows.map((r) => r.length));
-  const h = rows.length;
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  svg.setAttribute('width', String(w * pixelSize * 4));
-  svg.setAttribute('height', String(h * pixelSize * 4));
-  svg.setAttribute('shape-rendering', 'crispEdges');
-  svg.setAttribute('aria-hidden', 'true');
-  rows.forEach((row, y) => {
-    [...row].forEach((ch, x) => {
-      if (ch !== 'o') return;
-      const rect = document.createElementNS(SVG_NS, 'rect');
-      rect.setAttribute('x', String(x));
-      rect.setAttribute('y', String(y));
-      rect.setAttribute('width', '1');
-      rect.setAttribute('height', '1');
-      rect.setAttribute('fill', color);
-      svg.append(rect);
-    });
-  });
-  return svg;
-}
-
-/** 親×親 → 子 を表すピクセルのDNAバツ印ロゴ。 */
+/** 親×親 → 子 を表すピクセルの交差ロゴ（色はテーマCSSに追従）。 */
 function logoSprite(): SVGSVGElement {
   const cells: [number, number, string][] = [];
   const size = 16;
   for (let i = 0; i < 8; i++) {
     const c = i * 2;
-    cells.push([c, c, i === 4 ? '#f2f0f7' : '#ef3b80']); // \ 系（中央は白）
-    cells.push([size - 2 - c, c, i === 4 ? '#f2f0f7' : '#00a0c8']); // / 系
+    cells.push([c, c, i === 4 ? 'm0' : 'm2']); // \ 系
+    cells.push([size - 2 - c, c, i === 4 ? 'm0' : 'm1']); // / 系
   }
   const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'logo');
   svg.setAttribute('viewBox', '0 0 16 16');
   svg.setAttribute('width', '40');
   svg.setAttribute('height', '40');
   svg.setAttribute('shape-rendering', 'crispEdges');
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', 'Mashup Ours ロゴ');
-  for (const [x, y, fill] of cells) {
+  for (const [x, y, cls] of cells) {
     const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('x', String(x));
     rect.setAttribute('y', String(y));
     rect.setAttribute('width', '2');
     rect.setAttribute('height', '2');
-    rect.setAttribute('fill', fill);
+    rect.setAttribute('class', cls);
     svg.append(rect);
   }
   return svg;
 }
 
-/** 参考画像の端にいるような小さなピクセル生き物。 */
-const CRITTER = [
-  '..oooo..',
-  '.oooooo.',
-  'oo.oo.oo',
-  'oooooooo',
-  'oooooooo',
-  '.oooooo.',
-  '..o..o..',
-] as const;
-
 function label(n: ProtopediaWork | Offspring | undefined): string {
   return n ? n.title : '(不明)';
+}
+
+// ---------------------------------------------------------------------------
+// テーマ切替（ダーク / ライト）
+// ---------------------------------------------------------------------------
+
+const THEME_KEY = 'mashup-theme';
+
+type Theme = 'dark' | 'light';
+
+function currentTheme(): Theme {
+  const t = document.documentElement.dataset.theme;
+  if (t === 'dark' || t === 'light') return t;
+  const mq = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches
+    : false;
+  return mq ? 'dark' : 'light';
 }
 
 // ---------------------------------------------------------------------------
@@ -136,29 +112,57 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 const wrap = el('div', { class: 'wrap' });
 app.append(wrap);
 
-const heroTitleRow = el('div', { class: 'hero-title-row' }, logoSprite(), el('h1', {}, 'Mashup Ours'));
-wrap.append(
-  el(
-    'header',
-    { class: 'hero' },
-    el('p', { class: 'eyebrow' }, '— 発明の交配実験室 —'),
-    heroTitleRow,
-    el('p', { class: 'copy' }, '20年分の発明を、もう一度マッシュアップ。'),
-  ),
+const themeBtn = el('button', { class: 'theme-toggle', type: 'button' }) as HTMLButtonElement;
+
+function updateThemeBtn(): void {
+  const t = currentTheme();
+  themeBtn.textContent = t === 'dark' ? 'ライトにする' : 'ダークにする';
+  themeBtn.setAttribute('aria-label', `表示テーマを切り替える（現在: ${t === 'dark' ? 'ダーク' : 'ライト'}）`);
+}
+
+themeBtn.addEventListener('click', () => {
+  const next: Theme = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {
+    /* プライベートモード等では保存できないが表示は切り替わる */
+  }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', next === 'dark' ? '#202735' : '#FFF5DE');
+  updateThemeBtn();
+});
+
+const heroLeft = el(
+  'div',
+  {},
+  el('p', { class: 'eyebrow' }, '— 16bit 交配研究所 —'),
+  el('div', { class: 'hero-title-row' }, logoSprite(), el('h1', {}, 'Mashup Ours')),
+  el('p', { class: 'copy' }, '20年分の発明を、もう一度マッシュアップ。'),
 );
 
-// 画面端の浮遊ピクセルスプライト（参考画像の装飾）
-const sprite1 = pixelSprite(CRITTER, '#ef3b80', 2);
-sprite1.classList.add('sprite', 's1');
-const sprite2 = pixelSprite(CRITTER, '#00a0c8', 1);
-sprite2.classList.add('sprite', 's2');
-wrap.append(sprite1, sprite2);
+wrap.append(
+  el('header', { class: 'hero' }, el('div', { class: 'hero-top' }, heroLeft, themeBtn)),
+);
+updateThemeBtn();
+
+// --- 所長のメモ（セリフウィンドウ。キャラ画はMVP後に追加 / DESIGN.md §4） ---
+
+wrap.append(
+  el(
+    'div',
+    { class: 'memo window' },
+    el('div', { class: 'titlebar' }, el('span', {}, '所長のメモ')),
+    el('p', {}, '2つの発明をスロットに選んで「交配を申請」すると、GitHub Issueが開きます。'),
+    el('p', {}, '生成は1時間に1枠。すべてAIが考えた未実装のアイデアです。'),
+  ),
+);
 
 // 注意書き
 wrap.append(
   el(
     'div',
-    { class: 'notice' },
+    { class: 'notice window' },
     '生成された子作品は ',
     el('strong', {}, 'AIが考えた未実装の発明アイデア'),
     ' です。実際に製作したもの・実在の成果物ではありません。 ProtoPediaの元作品は出典リンク先を参照してください。',
@@ -170,7 +174,7 @@ if (works.some((w) => w.sample) || children.some((c) => c.sample)) {
   wrap.append(
     el(
       'div',
-      { class: 'notice warn' },
+      { class: 'notice warn window' },
       'ProtoPedia APIは未接続のため、現在は開発用サンプルデータを表示しています（[SAMPLE] 表記・実在の作品ではありません）。',
     ),
   );
@@ -180,16 +184,17 @@ if (!repoCfg) {
   wrap.append(
     el(
       'div',
-      { class: 'notice error' },
+      { class: 'notice error window' },
       'GitHub owner/repo が未設定です。.env.example を .env にコピーして VITE_GITHUB_OWNER / VITE_GITHUB_REPO を設定してください（交配申請リンクは設定後に有効になります）。Actions では GITHUB_REPOSITORY から自動設定されます。',
     ),
   );
 }
 
-// --- 親選択 ---------------------------------------------------------------
+// --- 交配マシン（親選択） ---------------------------------------------------
 
-const pickerSection = el('section', {}, el('h2', {}, '親を選ぶ'));
-const picker = el('div', { class: 'picker panel' });
+const pickerSection = el('section', {}, el('h2', {}, '親作品を選ぶ'));
+
+const picker = el('div', { class: 'picker' });
 
 function parentSelect(id: string, labelText: string): HTMLSelectElement {
   const sel = el('select', { id });
@@ -210,17 +215,35 @@ function parentSelect(id: string, labelText: string): HTMLSelectElement {
   return sel;
 }
 
-const selectA = parentSelect('parent-a', '親A');
+const selectA = parentSelect('parent-a', '親作品 A（スロットA）');
 const pickerCross = el('div', { class: 'cross' }, '×');
 picker.append(pickerCross); // grid順: A / × / B
-const selectB = parentSelect('parent-b', '親B');
+const selectB = parentSelect('parent-b', '親作品 B（スロットB）');
 
 const actions = el('div', { class: 'actions' });
-const breedBtn = el('button', { class: 'breed', type: 'button' }, '交配申請する（GitHub Issue）') as HTMLButtonElement;
+const breedBtn = el('button', { class: 'breed', type: 'button' }, '交配を申請') as HTMLButtonElement;
 const hint = el('span', { class: 'hint' });
 actions.append(breedBtn, hint);
-picker.append(actions);
-pickerSection.append(picker);
+
+const machine = el(
+  'div',
+  { class: 'machine window' },
+  el(
+    'div',
+    { class: 'titlebar' },
+    el('span', {}, '交配マシン'),
+    el(
+      'span',
+      { class: 'lamps', 'aria-hidden': 'true' },
+      el('span', { class: 'lamp mint' }),
+      el('span', { class: 'lamp yellow' }),
+      el('span', { class: 'lamp coral' }),
+    ),
+  ),
+  picker,
+  actions,
+);
+pickerSection.append(machine);
 wrap.append(pickerSection);
 
 function currentPair(): [ParentId, ParentId] | null {
@@ -254,7 +277,7 @@ refreshBreedButton();
 // --- 次の交配枠 ------------------------------------------------------------
 
 const slotSection = el('section', {}, el('h2', {}, '交配待ち・次の枠'));
-const slotPanel = el('div', { class: 'panel slot' });
+const slotPanel = el('div', { class: 'slot window' });
 const nowSlot = slotKey(new Date());
 const slotTaken = children.some((c) => c.slot === nowSlot && !c.sample);
 slotPanel.append(
@@ -269,17 +292,13 @@ slotPanel.append(
   el('div', {}, '1時間に1枠は全ユーザー共有です（ユーザーごとに毎時1回ではありません）。'),
   repoCfg
     ? el(
-        'div',
-        {},
-        el(
-          'a',
-          {
-            href: `https://github.com/${repoCfg.owner}/${repoCfg.repo}/issues`,
-            target: '_blank',
-            rel: 'noopener',
-          },
-          '交配待ちのIssue一覧 →',
-        ),
+        'a',
+        {
+          href: `https://github.com/${repoCfg.owner}/${repoCfg.repo}/issues`,
+          target: '_blank',
+          rel: 'noopener',
+        },
+        '交配待ちのIssue一覧 →',
       )
     : el('div', { class: 'empty' }, '交配待ちのIssue一覧はリポジトリ設定後に表示されます。'),
 );
@@ -328,9 +347,10 @@ const legend = el(
   { class: 'pedigree-legend' },
   el('span', { class: 'key' }, el('span', { class: 'swatch proto' }), 'ProtoPediaの元作品（実線・第0世代）'),
   el('span', { class: 'key' }, el('span', { class: 'swatch child' }), 'AIが生んだ子作品（破線・未実装アイデア）'),
+  el('span', { class: 'scroll-hint' }, '横スクロールで系譜をたどれます'),
 );
-const pedScroll = el('div', { class: 'pedigree-scroll' });
-const detailBox = el('div', { class: 'detail' }, el('p', { class: 'empty' }, 'ノードをクリックすると詳細を表示します。'));
+const pedScroll = el('div', { class: 'pedigree-scroll window' });
+const detailBox = el('div', { class: 'detail window' }, el('p', { class: 'empty' }, 'ノードをクリックすると詳細を表示します。'));
 pedSection.append(legend, pedScroll, detailBox);
 wrap.append(pedSection);
 
@@ -346,10 +366,10 @@ const NODE_H = 44;
 const COL_W = 300;
 const NODE_FONT = 13;
 
-/** フォント幅の概算（DotGothic16想定: 全角 = fontSize、半角 ≈ 0.62 × fontSize）。 */
+/** フォント幅の概算（本文 = Noto Sans JP想定: 全角 ≈ fontSize、半角 ≈ 0.6 × fontSize）。 */
 function estTextWidth(s: string, fontSize = NODE_FONT): number {
   let w = 0;
-  for (const ch of s) w += (ch.codePointAt(0) ?? 0) < 0x80 ? fontSize * 0.62 : fontSize;
+  for (const ch of s) w += (ch.codePointAt(0) ?? 0) < 0x80 ? fontSize * 0.6 : fontSize;
   return w;
 }
 
@@ -401,8 +421,7 @@ const svgW = 30 + (Math.max(0, ...[...layout.values()].map((n) => n.gen)) + 1) *
 const svgH = maxY + NODE_H + 40;
 
 function renderPedigree(): void {
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNS, 'svg');
+  const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('width', String(svgW));
   svg.setAttribute('height', String(svgH));
   svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
@@ -411,7 +430,7 @@ function renderPedigree(): void {
     const from = layout.get(p);
     const to = layout.get(c);
     if (!from || !to) continue;
-    const path = document.createElementNS(svgNS, 'path');
+    const path = document.createElementNS(SVG_NS, 'path');
     const x1 = from.x + NODE_W;
     const y1 = from.y + NODE_H / 2;
     const x2 = to.x;
@@ -425,20 +444,19 @@ function renderPedigree(): void {
   for (const n of layout.values()) {
     const node = nodeById.get(n.id);
     if (!node) continue;
-    const g = document.createElementNS(svgNS, 'g');
+    const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('class', `node ${isOffspring(node) ? 'child' : 'proto'}`);
     g.setAttribute('tabindex', '0');
     g.setAttribute('role', 'button');
     g.setAttribute('aria-label', `${node.title}（${n.id}）`);
-    const rect = document.createElementNS(svgNS, 'rect');
+    const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('x', String(n.x));
     rect.setAttribute('y', String(n.y));
     rect.setAttribute('width', String(NODE_W));
     rect.setAttribute('height', String(NODE_H));
-    // 角丸なし＝ドット絵矩形
-    const hoverTitle = document.createElementNS(svgNS, 'title');
+    const hoverTitle = document.createElementNS(SVG_NS, 'title');
     hoverTitle.textContent = `${node.title} — ${node.summary}`;
-    const text = document.createElementNS(svgNS, 'text');
+    const text = document.createElementNS(SVG_NS, 'text');
     const title = truncateToWidth(node.title, NODE_W - 24);
     text.setAttribute('x', String(n.x + 12));
     text.setAttribute('y', String(n.y + NODE_H / 2 + 4));
@@ -470,7 +488,7 @@ function renderDetail(id: string): void {
     badges.append(el('span', { class: 'badge idea' }, 'AIが考えた未実装の発明アイデア'));
     if (node.sample) badges.append(el('span', { class: 'badge sample' }, 'SAMPLE'));
   } else if (node.sample) {
-    badges.append(el('span', { class: 'badge sample' }, '開発用サンプル' ));
+    badges.append(el('span', { class: 'badge sample' }, '開発用サンプル'));
   }
 
   add('概要', node.summary);

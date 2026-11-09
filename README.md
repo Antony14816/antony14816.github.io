@@ -57,17 +57,26 @@ parent_b: protopedia:5678
 mode: fusion
 ```
 
-- 親Aと親Bは別のID、許可されたID形式（`protopedia:<数字>` / `mashup:<数字>`）のみ。
+- 親Aと親Bは別のID、許可されたID形式（`protopedia:<数字>` / `mashup-<数字>`）のみ。
 - 不正な入力はAIを呼ばずに理由をコメントします。
 
-## デザイン（ドット絵風ダークテーマ）
+## デザイン（16bit交配研究所 / DESIGN.md準拠）
 
-参考画像をもとに、ニアバック + ピンクアクセント + ピクセル装飾のレトロWeb調。
+デザインの基準は `DESIGN.md`。「ちょっと怪しい発明博士の、16bit交配研究所」。MOTHER2/マサキの家の雰囲気を**抽象化して独自に**構成し、既存IPの画像・キャラクター・UI配置は流用しない。
 
-- **フォント**: 見出し・本文は [DotGothic16](https://fonts.google.com/specimen/DotGothic16)、ロゴは [Press+2P](https://fonts.google.com/specimen/Press+Start+2P)（**Google Fonts CDN への外部接続あり**。届かない環境では等幅フォントにフォールバック）。
-- **家系図の配色は dataviz 手順で検証済み**: surface `#15121c` / 元作品 `#00a0c8`（実線）/ 子作品 `#ef3b80`（破線）— ライトネス帯・彩度下限・CVD分離・通常視覚・コントラストの全チェックPASS。**色だけに依存させない**ため凡例 + 線種（実線/破線）で二重化している。勝手に色を替えない。
-- **装飾**: CSSグリッド背景、パネル四隅のL字ブラケット、ハードシャドウ、`▸` 見出しマーカー、SVGピクセル生き物スプライト（`steps()` 点滅、`prefers-reduced-motion` で停止）。
-- **スクリーンショット確認**: `npm run build && npx vite preview --port 4173` を起動してから `npm run screenshot`（`tmp/` に出力。初回のみ `npx playwright install chromium` と `install-deps` が必要）。
+- **ダーク / ライト切り替え**: ヘッダー右上のボタンで切り替え、`localStorage['mashup-theme']` に保存。既定はOS設定。`index.html` の初期化スクリプトがCSS読込前に `data-theme` を設定し、テーマフラッシュを防ぐ。トークンは `:root` の `--lab-*`（固定パレット）とロールトークン（`--bg` / `--window` / `--line` / `--text` など）に集中管理。
+- **フォント**: 見出し・ボタン・ラベルは [DotGothic16](https://fonts.google.com/specimen/DotGothic16)、**本文は [Noto Sans JP](https://fonts.google.com/specimen/Noto+Sans+JP)** で可読性優先（**Google Fonts CDN への外部接続あり**。届かない環境ではゴシック/等幅にフォールバック）。
+- **ウィンドウ**: 太い外枠3px + 内側の細い線（inset）+ 右下ハードシャドウのRPG風。角丸・ガラス調・ネオンは不使用。
+- **家系図の配色は dataviz 手順で検証済み（両テーマ・ノード面でPASS）**:
+  | テーマ | 面 | 元作品（実線） | 子作品（破線） |
+  |---|---|---|---|
+  | ダーク | `#303C51` | `#12A87D` | `#D96B4F` |
+  | ライト | `#FFFCF0` | `#0F9D72` | `#C15733` |
+
+  CVD分離は ΔE 7〜8 のWARN帯のため、**凡例 + 線種（実線/破線）+ ノードラベルで二重化**して合法化している。勝手に色を替えない。
+- **コントラスト**: 本文はAA（4.5:1以上）をトークンで確保。アクセント色の強調語は `--accent-ink`（通常サイズでAA）、タグラインは太字19pxの「大きな文字」経路（3:1以上）を使う。装飾は `aria-hidden`、状態は色のみで区別しない（ラベル・線種・マーク併用）。
+- **装飾**: 浮遊スプライト・点滅・グリッド背景は不使用（DESIGN.md §3.1/§6）。所長のメモは文字だけのセリフウィンドウ（キャラ画はMVP後の制作タスク）。
+- **スクリーンショット確認**: `npm run build && npx vite preview --port 4173` を起動してから `npm run screenshot`（**ライト/ダーク両テーマ** × デスクトップ/詳細/モバイルを `tmp/` に出力。初回のみ `npx playwright install chromium` と `install-deps` が必要）。
 
 ## ID名前空間の決定事項
 
