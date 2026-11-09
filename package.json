@@ -1,0 +1,25 @@
+{
+  "name": "mashup-ours",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "20年分の発明を、もう一度マッシュアップ。ProtoPedia作品の交配から新しい発明アイデアを生み出すサービス",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "validate-data": "node --experimental-strip-types scripts/validate-data.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "happy-dom": "^21.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "vitest": "^3.2.4"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

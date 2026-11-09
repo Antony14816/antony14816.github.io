@@ -1,0 +1,44 @@
+[
+  {
+    "id": "mashup-000001",
+    "schemaVersion": 1,
+    "title": "[SAMPLE] 光る歴史散歩デバイス",
+    "summary": "架空サンプル：歴史的な場所を歩くと体験が光で変化する未実装の発明案",
+    "concept": "架空サンプルデータ。街を歩きながら歴史の層を体感する散歩者向け。",
+    "mechanism": "架空サンプルデータ。位置履歴と光演出の組み合わせ（想定）。",
+    "inheritedTraits": [
+      { "parentId": "protopedia:9001", "trait": "現在地を光で示す地図" },
+      { "parentId": "protopedia:9004", "trait": "歩いた軌跡が浮かぶ体験" }
+    ],
+    "parents": ["protopedia:9001", "protopedia:9004"],
+    "generation": 1,
+    "mode": "fusion",
+    "sourceIssue": 0,
+    "slot": "2026-11-08T09",
+    "createdAt": "2026-11-08T09:12:00Z",
+    "model": "sample/model",
+    "status": "idea",
+    "sample": true
+  },
+  {
+    "id": "mashup-000002",
+    "schemaVersion": 1,
+    "title": "[SAMPLE] 手紙の声が導く光の散歩",
+    "summary": "架空サンプル：古い手紙の声と光る地図が、散歩のルートを同時に教える未実装の発明案",
+    "concept": "架空サンプルデータ。史跡を歩く人が手紙の声と一緒に光を辿る体験。",
+    "mechanism": "架空サンプルデータ。読み上げと光の同期（想定）。",
+    "inheritedTraits": [
+      { "parentId": "mashup-000001", "trait": "歩くと変化する光の演出" },
+      { "parentId": "protopedia:9002", "trait": "文字を音で読む体験" }
+    ],
+    "parents": ["mashup-000001", "protopedia:9002"],
+    "generation": 2,
+    "mode": "fusion",
+    "sourceIssue": 0,
+    "slot": "2026-11-08T11",
+    "createdAt": "2026-11-08T11:05:00Z",
+    "model": "sample/model",
+    "status": "idea",
+    "sample": true
+  }
+]

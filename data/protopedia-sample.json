@@ -1,0 +1,37 @@
+{
+  "_notice": "開発用の架空サンプルデータ。本番のProtoPedia作品ではありません。sample: true の作品はUI上でその旨を表示すること。",
+  "works": [
+    {
+      "id": "protopedia:9001",
+      "title": "[SAMPLE] 歩くと光る地図スタンド",
+      "sourceUrl": "https://proto.pedia.example/sample-9001",
+      "summary": "架空サンプル：持ち歩くと現在地の周辺史跡が光で示される地図スタンド。",
+      "generation": 0,
+      "sample": true
+    },
+    {
+      "id": "protopedia:9002",
+      "title": "[SAMPLE] 音で読む古い手紙キット",
+      "sourceUrl": "https://proto.pedia.example/sample-9002",
+      "summary": "架空サンプル：古い手紙の文字を読み上げと環境音で体験するキット。",
+      "generation": 0,
+      "sample": true
+    },
+    {
+      "id": "protopedia:9003",
+      "title": "[SAMPLE] 余白だけを残す写真フレーム",
+      "sourceUrl": "https://proto.pedia.example/sample-9003",
+      "summary": "架空サンプル：被写体以外の余白を動的に切り取る写真フレーム。",
+      "generation": 0,
+      "sample": true
+    },
+    {
+      "id": "protopedia:9004",
+      "title": "[SAMPLE] 足あとで描く庭のパス",
+      "sourceUrl": "https://proto.pedia.example/sample-9004",
+      "summary": "架空サンプル：歩いた軌跡が庭に一時的に浮かぶペーバートレッキング。",
+      "generation": 0,
+      "sample": true
+    }
+  ]
+}

@@ -1,0 +1,295 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1e222b;
+  --border: #2b303b;
+  --text: #e6e8ec;
+  --muted: #9aa1ad;
+  --accent: #6ea8fe;
+  --accent-2: #8f7bfe;
+  --sample: #e0b354;
+  --danger: #ff7b72;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Hiragino Sans", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+a {
+  color: var(--accent);
+}
+
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+header.hero {
+  padding: 24px 0 8px;
+}
+
+header.hero h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  letter-spacing: 0.02em;
+}
+
+header.hero .copy {
+  color: var(--muted);
+  font-size: 1.05rem;
+  margin: 6px 0 0;
+}
+
+.notice {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin: 16px 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.notice.warn {
+  border-color: var(--sample);
+  color: var(--sample);
+}
+
+.notice.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+section {
+  margin-top: 28px;
+}
+
+section > h2 {
+  font-size: 1.2rem;
+  margin: 0 0 12px;
+  border-left: 4px solid var(--accent-2);
+  padding-left: 10px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.picker {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+@media (max-width: 720px) {
+  .picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+.picker label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.picker select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.picker .cross {
+  font-size: 1.4rem;
+  color: var(--muted);
+  padding-bottom: 8px;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+button.breed {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b0d12;
+  font-weight: 700;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 22px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button.breed:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.slot {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+}
+
+.slot .value {
+  font-family: ui-monospace, monospace;
+  color: var(--accent);
+}
+
+ul.offspring {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+ul.offspring li {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+ul.offspring li:hover {
+  border-color: var(--accent);
+}
+
+ul.offspring .title {
+  font-weight: 700;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 6px;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.badge.sample {
+  border-color: var(--sample);
+  color: var(--sample);
+}
+
+.badge.idea {
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+}
+
+.pedigree-scroll {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+.pedigree-scroll svg {
+  display: block;
+}
+
+.pedigree-scroll .node {
+  cursor: pointer;
+}
+
+.pedigree-scroll .node rect {
+  fill: var(--panel-2);
+  stroke: var(--border);
+}
+
+.pedigree-scroll .node.proto rect {
+  stroke: var(--accent);
+}
+
+.pedigree-scroll .node.child rect {
+  stroke: var(--accent-2);
+  stroke-dasharray: 4 3;
+}
+
+.pedigree-scroll .node:hover rect {
+  stroke: #fff;
+}
+
+.pedigree-scroll .node text {
+  fill: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.pedigree-scroll .edge {
+  stroke: var(--border);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.detail {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.detail h3 {
+  margin: 0 0 6px;
+}
+
+.detail dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.detail dd {
+  margin: 2px 0 0;
+}
+
+button.linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
