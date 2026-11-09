@@ -111,7 +111,7 @@ slot: 2026-11-09T12                                 ← 申請時の候補スロ
   画像タイルは下地 `--tile`（白系・両テーマ共通）で `object-fit: contain`・`loading=lazy`・読込失敗時は「画像なし」プレースホルダ（枠は維持）。
   見出しは DotGothic16 + ラテン小見出し、枠・色は研究所トークンのまま — **一般的なSaaSカードUIにしない**。
   選択状態は「タイル枠の色 + バッジ文字（親A選択中）+ 押下ボタン」の三重化で色だけに依存しない。
-- **一覧ページ `/ideas`**: Viteマルチページ（`ideas/index.html` + `src/ideas.ts`）。`data/offspring.json` のみを新しい順に列挙し、各項目に 未実装バッジ・世代・親リンク（子作品=トップの `?id=` ディープリンク / ProtoPedia=出典URL）・生成日時（JST）・元Issue（あれば）を表示。0件なら空状態で申請誘導。トップの「最近誕生した発明」見出しからリンクする。
+- **一覧ページ `/ideas`**: Viteマルチページ（`public/ideas/index.html` + `public/ideas.ts`）。`data/offspring.json` のみを新しい順に列挙し、各項目に 未実装バッジ・世代・親リンク（子作品=トップの `?id=` ディープリンク / ProtoPedia=出典URL）・生成日時（JST）・元Issue（あれば）を表示。0件なら空状態で申請誘導。トップの「最近誕生した発明」見出しからリンクする。
 - **家系図の配色は dataviz 手順で検証済み（両テーマ・ノード面でPASS）**:
   | テーマ | 面 | 元作品（実線） | 子作品（破線） |
   |---|---|---|---|
@@ -167,9 +167,14 @@ npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル +
 ├── AGENTS.md            # プロジェクト規約（最初に読む）
 ├── DESIGN.md            # デザイン規約（16bit交配研究所）
 ├── README.md
-├── index.html
-├── ideas/index.html     # /ideas アイデア一覧（マルチページエントリ）
-├── src/                 # GitHub Pages用UI（vanilla TS / トップ main.ts・一覧 ideas.ts）
+├── public/              # 公開サイト一式（Viteのroot。ページ・UI・静的ファイル）
+│   ├── index.html       # / トップ（交配研究所）
+│   ├── main.ts          # トップのUI（vanilla TS）
+│   ├── ideas.ts         # /ideas 一覧ページのUI
+│   ├── ideas/           # /ideas アイデア一覧（マルチページエントリ）
+│   ├── style.css        # 16bit 交配研究所テーマ
+│   └── static/          # そのまま配信する生ファイル（dist直下へコピー）
+│       └── sprites/     # ピクセル絵素材（現時点では未参照・後で取り込む予定）
 ├── lib/                 # 型・Issueパーサー・世代計算・候補選出・ProtoPedia/設定（フロント/ワーカー共有）
 ├── data/                # offspring.json / current-candidates.json / *sample*.json
 ├── logs/                # 開発ログ（public公開のため秘密情報は書かない / 書式は logs/README.md）

@@ -6,7 +6,7 @@
 import { expect, it } from 'vitest';
 import type { Offspring } from '../lib/types.ts';
 import sampleOffspring from '../data/offspring.sample.json';
-import { buildIdeasPage, type IdeasContext } from '../src/ideas.ts';
+import { buildIdeasPage, type IdeasContext } from '../public/ideas.ts';
 
 const fixtures = sampleOffspring as unknown as Offspring[];
 

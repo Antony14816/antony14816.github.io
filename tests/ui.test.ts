@@ -15,7 +15,7 @@ const expectedCards = candFileValid ? rawCandidates.candidates.length : 4;
 async function boot() {
   vi.resetModules(); // main.ts を毎回再実行する
   document.body.innerHTML = '<div id="app"></div>';
-  await import('../src/main.ts');
+  await import('../public/main.ts');
   const cards = () => Array.from(document.querySelectorAll<HTMLElement>('.candidate'));
   const pickBtn = (cardIdx: number, slot: 'a' | 'b') =>
     cards()[cardIdx].querySelectorAll<HTMLButtonElement>('button.pick')[slot === 'a' ? 0 : 1];
