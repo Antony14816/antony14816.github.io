@@ -44,6 +44,7 @@ npm run dev            # http://localhost:5173
 | `GITHUB_REPOSITORY` | Actionsが自動提供。ビルド時にクライアントへ注入 | Actions |
 | `AI_API_KEY` | 生成AIプロバイダーのキー（**GitHub Secretsのみ**） | 交配処理時 |
 | `PROTOPEDIA_API_V2_TOKEN` | ProtoPedia API v2のトークン（**GitHub Secrets / ローカルenvのみ。VITE_ プレフィックス禁止**） | 作品同期時 |
+| `GH_TOKEN` | ローカルの `gh` CLI用PAT（`.env` 専用・`node scripts/gh.mjs` が読む。**VITE_ プレフィックス禁止**。Actionsは `GITHUB_TOKEN` で自動認証） | 開発issue登録時のみ |
 
 ## GitHub上の設定（手動）
 
@@ -166,7 +167,8 @@ npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル�
 ├── src/                 # GitHub Pages用UI（vanilla TS）
 ├── lib/                 # 型・Issueパーサー・世代計算・候補選出・ProtoPedia/設定（フロント/ワーカー共有）
 ├── data/                # offspring.json / current-candidates.json / *sample*.json
-├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot
+├── logs/                # 開発ログ（public公開のため秘密情報は書かない / 書式は logs/README.md）
+├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot / gh（.envのGH_TOKEN実行ランナー）
 ├── tests/
 └── .github/workflows/   # deploy.yml / sync-prototypes.yml（dispatchのみ） /
                          # rotate-candidates.yml（毎時） / breed.yml（実装予定）
