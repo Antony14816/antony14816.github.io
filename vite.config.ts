@@ -3,13 +3,16 @@ import type { Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
-// GitHub Pages のプロジェクトサイトとして公開するため base をリポジトリ名に合わせる。
-// repo 名はハードコードせず、優先順位で決める:
-//   1. VITE_BASE（明示的な上書き）
-//   2. GITHUB_REPOSITORY（Actions が自動提供 → /<repo>/）
-//   3. ローカル開発は '/' ）
-const ghrRepo = process.env.GITHUB_REPOSITORY?.split('/')[1];
-const basePath = process.env.VITE_BASE ?? (ghrRepo ? `/${ghrRepo}/` : '/');
+// base パスの決定（優先順位）:
+//   1. VITE_BASE（明示的な絶対パス上書き。例: VITE_BASE=/<repo>/）
+//   2. 既定 './'（**相対base**）— ドメイン・公開パスの変更に追従不要:
+//      - カスタムドメインのルート配信（https://example.com/）
+//      - <owner>.github.io/<repo>/（パス付き）
+//      - フォーク先での公開
+//      どれでもアセット・内部リンクがそのまま動く。
+//      （2026-11-10 に絶対パス /<repo>/ のままカスタムドメイン公開して真っ黒になったため、
+//      ドメイン変更の可能性を踏まえて相対baseへ変更。）
+const basePath = process.env.VITE_BASE ?? './';
 
 // 公開サイト一式は public/ をルートにする（ページ: public/index.html, public/ideas/index.html）。
 // public/static はそのまま dist 直下へコピーされる「生ファイル」置き場（例: sprites/）。

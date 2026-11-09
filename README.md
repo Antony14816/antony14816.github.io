@@ -48,7 +48,7 @@ npm run dev            # http://localhost:5173
 
 ## GitHub上の設定（手動）
 
-1. **Pages**: Settings → Pages → Source を `GitHub Actions` に設定（`deploy.yml` が push のたびにテスト → ビルド → デプロイ。base パスと Issue リンクは `GITHUB_REPOSITORY` から自動導出するため、リポジトリをフォークしても再設定不要）。
+1. **Pages**: Settings → Pages → Source を `GitHub Actions` に設定（`deploy.yml` が push のたびにテスト → ビルド → デプロイ）。**base は既定で相対パス（`./`）**: カスタムドメインのルート配信・`<owner>.github.io/<repo>/`・フォーク先のいずれでも、ドメインや公開パスを変更してもビルド設定なしで動く（Issue リンクは `GITHUB_REPOSITORY` から自動導出）。絶対パスに固定したい場合のみ `VITE_BASE=/<repo>/` を指定する。絶対パス base をカスタムドメインで使うとアセットが全部404で真っ黒になる（実例: 2026-11-10 → 相対baseへ修正）。
 2. **Issues**: Settings → Issues でラベル `breeding-request` を用意（ワークフロー側で管理。利用者が付ける前提にしない）。
 3. **Secrets**: Settings → Secrets and variables → Actions に登録:
    - `AI_API_KEY`（交配処理。未設定時はドライランのみ）

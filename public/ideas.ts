@@ -66,7 +66,7 @@ function fmtDate(iso: string): string {
 export interface IdeasContext {
   /** Issueリンク用。未設定なら元Issueのリンクは出さない（トップと同じ）。 */
   repoCfg: { owner: string; repo: string } | null;
-  /** import.meta.env.BASE_URL（'/' または '/<repo>/'）。 */
+  /** サイトルートへの基点（'/' や '/<repo>/'、相対base時は '../'）。 */
   base: string;
 }
 
@@ -290,8 +290,14 @@ export function buildIdeasPage(
 // 本番ページ（ideas/index.html）では自動起動。テストは buildIdeasPage を直接呼ぶ。
 const hostEl = document.querySelector<HTMLElement>('#ideas-app');
 if (hostEl) {
+  // base が絶対（'/' や '/<repo>/'）ならそのまま。相対（'./'）ならこのページは
+  // <root>/ideas/ にいるので、サイトルートへのリンクは '../'（ルート位置のページと
+  // 決まりで解決）。どのドメイン・公開パスでも追従する。
+  const siteBase = import.meta.env.BASE_URL.startsWith('/')
+    ? import.meta.env.BASE_URL
+    : '../';
   buildIdeasPage(hostEl, offspring, {
     repoCfg,
-    base: import.meta.env.BASE_URL,
+    base: siteBase,
   });
 }
