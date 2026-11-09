@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#202735" />
+    <meta
+      name="description"
+      content="Mashup Oursでこれまでに生まれた、AIが考えた未実装の発明アイデアの一覧。世代・親作品・出典・生成Issueへのリンクつき。"
+    />
+    <title>生み出されたアイデア — Mashup Ours</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+JP:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // テーマの早期適用（白/黒フラッシュ防止）。トップの index.html と同じ規則。
+      (function () {
+        try {
+          var t = localStorage.getItem('mashup-theme');
+          if (t !== 'dark' && t !== 'light') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          var el = document.documentElement;
+          el.dataset.theme = t;
+          el.style.background = t === 'dark' ? '#202735' : '#FFF5DE';
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', t === 'dark' ? '#202735' : '#FFF5DE');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="ideas-app"></div>
+    <script type="module" src="/src/ideas.ts"></script>
+  </body>
+</html>

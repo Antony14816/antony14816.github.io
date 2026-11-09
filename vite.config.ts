@@ -21,6 +21,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // マルチページ（トップ + /ideas）。GitHub Pagesは静的配信のため
+    // ideas/index.html を出力し /<repo>/ideas/ に解決させる（issue #8）。
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        ideas: 'ideas/index.html',
+      },
+    },
   },
   test: {
     environment: 'node',

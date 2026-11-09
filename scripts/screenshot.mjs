@@ -23,8 +23,8 @@ async function newThemedPage(viewport, theme) {
   return page;
 }
 
-async function goto(page) {
-  await page.goto(base, { waitUntil: 'load', timeout: 30000 });
+async function goto(page, path = '') {
+  await page.goto(new URL(path, base).toString(), { waitUntil: 'load', timeout: 30000 });
   await page.waitForTimeout(800); // Webフォント読み込み待ち
   // lazy画像を確実に読み込ませる（初回キャッシュ無しで撮ると1枚欠けるため）
   await page.evaluate(async () => {
@@ -84,6 +84,20 @@ for (const theme of ['light', 'dark']) {
   await mobile.screenshot({ path: `tmp/shot-mobile-${theme}.png`, fullPage: true });
   console.log(`saved tmp/shot-mobile-${theme}.png`);
   await mobile.close();
+}
+
+// --- /ideas アイデア一覧（issue #8）: 両テーマ × デスクトップ/モバイル -------
+for (const vp of [
+  { name: 'desktop', width: 1280, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+]) {
+  for (const theme of ['light', 'dark']) {
+    const page = await newThemedPage({ width: vp.width, height: vp.height }, theme);
+    await goto(page, 'ideas/');
+    await page.screenshot({ path: `tmp/shot-ideas-${vp.name}-${theme}.png`, fullPage: true });
+    console.log(`saved tmp/shot-ideas-${vp.name}-${theme}.png`);
+    await page.close();
+  }
 }
 
 await browser.close();

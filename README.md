@@ -92,10 +92,12 @@ parent_a_url: https://protopedia.net/prototype/1234 ← 表示・照合用の「
 parent_b_url: https://protopedia.net/prototype/5678
 mode: fusion
 slot: 2026-11-09T12                                 ← 申請時の候補スロット（UTC）
+<!-- 任意: comment: の後に1行だけで自由記述（最大300字・交配の動機など） -->
 ```
 
 - 親Aと親Bは別のID、許可されたID形式（`protopedia:<数字>` / `mashup-<数字>`）のみ。
 - `slot` / `*_url` は付いていれば形式を検証して記録。URLは命令として扱わず、ワーカーは親IDから出典URLを再導出する。
+- `comment` は任意の自由記述（1行・最大300字）。**データとして保持するだけで、シェル・Actions式・AIプロンプトには渡しません**（issue #7）。
 - 不正な入力はAIを呼ばずに理由をコメントします。
 
 ## デザイン（16bit交配研究所 / DESIGN.md準拠）
@@ -109,6 +111,7 @@ slot: 2026-11-09T12                                 ← 申請時の候補スロ
   画像タイルは下地 `--tile`（白系・両テーマ共通）で `object-fit: contain`・`loading=lazy`・読込失敗時は「画像なし」プレースホルダ（枠は維持）。
   見出しは DotGothic16 + ラテン小見出し、枠・色は研究所トークンのまま — **一般的なSaaSカードUIにしない**。
   選択状態は「タイル枠の色 + バッジ文字（親A選択中）+ 押下ボタン」の三重化で色だけに依存しない。
+- **一覧ページ `/ideas`**: Viteマルチページ（`ideas/index.html` + `src/ideas.ts`）。`data/offspring.json` のみを新しい順に列挙し、各項目に 未実装バッジ・世代・親リンク（子作品=トップの `?id=` ディープリンク / ProtoPedia=出典URL）・生成日時（JST）・元Issue（あれば）を表示。0件なら空状態で申請誘導。トップの「最近誕生した発明」見出しからリンクする。
 - **家系図の配色は dataviz 手順で検証済み（両テーマ・ノード面でPASS）**:
   | テーマ | 面 | 元作品（実線） | 子作品（破線） |
   |---|---|---|---|
@@ -143,6 +146,7 @@ slot: 2026-11-09T12                                 ← 申請時の候補スロ
 - [ ] ProtoPedia APIのレート制限・1レスポンスの件数上限（ページ間隔100msで暫定対応）。
 - [ ] 生成AIプロバイダーの選定（料金・無料枠・構造化出力）。`AI_API_KEY` 未設定時はドライラン。
 - [ ] `data/offspring.json` へのコミットとブランチ保護の兼ね合い — Actions実装時に確認、必要ならPR方式へ。
+- [ ] GitHub Pages 本番での `/ideas` 配信 — ローカル preview では `/`・`/ideas/`・`/ideas` すべて200を確認。Pagesの `/ideas` → `/ideas/` リダイレクト挙動は未検証（自前リンクは末尾 `/` つきなので影響なし）。
 
 ## 開発コマンド
 
@@ -153,7 +157,7 @@ npm run build           # 型チェック + 本番ビルド
 npm run validate-data   # offspring / prototypes / sample-prototypes / current-candidates の検証
 npm run fetch:sample    # ProtoPediaから少数だけ取得 → data/sample-prototypes.json（トークン要）
 npm run rotate:candidates # 候補6件をスロットから決定的に選出 → data/current-candidates.json（トークン不要）
-npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイルのスクリーンショット（tmp/）
+npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル + /ideas一覧のスクリーンショット（tmp/）
 ```
 
 ## ディレクトリ
@@ -164,7 +168,8 @@ npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル�
 ├── DESIGN.md            # デザイン規約（16bit交配研究所）
 ├── README.md
 ├── index.html
-├── src/                 # GitHub Pages用UI（vanilla TS）
+├── ideas/index.html     # /ideas アイデア一覧（マルチページエントリ）
+├── src/                 # GitHub Pages用UI（vanilla TS / トップ main.ts・一覧 ideas.ts）
 ├── lib/                 # 型・Issueパーサー・世代計算・候補選出・ProtoPedia/設定（フロント/ワーカー共有）
 ├── data/                # offspring.json / current-candidates.json / *sample*.json
 ├── logs/                # 開発ログ（public公開のため秘密情報は書かない / 書式は logs/README.md）

@@ -556,7 +556,17 @@ breedBtn.addEventListener('click', () => {
 // ③ 最近誕生した発明（直近の交配結果）
 // ---------------------------------------------------------------------------
 
-const listSection = el('section', {}, el('h2', {}, '最近誕生した発明'));
+const listSection = el(
+  'section',
+  {},
+  el(
+    'h2',
+    {},
+    '最近誕生した発明 ',
+    // 一覧ページへの導線（issue #8）。BASE_URL前提の相対リンクでリポジトリ名を固定しない。
+    el('a', { href: `${import.meta.env.BASE_URL}ideas/` }, 'アイデア一覧 (/ideas) →'),
+  ),
+);
 const list = el('ul', { class: 'offspring' });
 const sorted = [...children].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 if (sorted.length === 0) {
@@ -819,3 +829,8 @@ function selectNode(id: string): void {
 
 renderPedigree();
 updateSelectionUI();
+
+// ?id= ディープリンク（/ideas の「家系図で詳細を見る」から戻る用 / issue #8）。
+// 無効・未知のIDは無視して初期表示のまま。
+const initialId = new URLSearchParams(window.location.search).get('id');
+if (initialId && nodeById.has(initialId)) selectNode(initialId);

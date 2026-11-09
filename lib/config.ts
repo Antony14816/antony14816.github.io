@@ -3,6 +3,8 @@
  * フロントは Vite の VITE_* 環境変数 + ビルド時注入、ワーカーは Actions の env から受け取る。
  */
 
+import { MAX_COMMENT_LENGTH } from './issue.ts';
+
 export interface RepoConfig {
   owner: string;
   repo: string;
@@ -46,7 +48,12 @@ export function newIssueUrl(
   if (opts.parentBUrl) lines.push(`parent_b_url: ${opts.parentBUrl}`);
   lines.push(`mode: ${opts.mode ?? 'fusion'}`);
   if (opts.slot) lines.push(`slot: ${opts.slot}`);
-  lines.push('', '<!-- mashup-ours: generated link -->');
+  lines.push(
+    '',
+    // コメント欄のヒント（issue #7）。HTMLコメントなので投稿後は非表示、編集画面でのみ見える。
+    `<!-- 任意: comment: の後に1行だけで自由記述を追加できます（最大${MAX_COMMENT_LENGTH}字・交配の動機など） -->`,
+    '<!-- mashup-ours: generated link -->',
+  );
   const params = new URLSearchParams({ title, body: lines.join('\n') });
   return `https://github.com/${cfg.owner}/${cfg.repo}/issues/new?${params.toString()}`;
 }

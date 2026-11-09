@@ -3,7 +3,7 @@
  */
 
 /** 親作品のID。namespaced で表す。 */
-export type ParentId = `protopedia:${number}` | `mashup:${string}`;
+export type ParentId = `protopedia:${number}` | `mashup-${string}`;
 
 /** ProtoPedia の元作品（第0世代）。出典URL必須。 */
 export interface ProtopediaWork {
@@ -81,4 +81,6 @@ export interface BreedingRequest {
   mode: BreedingMode;
   /** 申請時の候補スロット（任意）。形式: UTC "YYYY-MM-DDTHH"（追加開発指示 §8） */
   slot?: string;
+  /** 任意の自由記述コメント（1行・最大300字 / issue #7）。データとして保持するだけ。 */
+  comment?: string;
 }

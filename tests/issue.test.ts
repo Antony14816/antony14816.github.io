@@ -105,6 +105,46 @@ describe('parseBreedingIssue', () => {
     );
     expect(evil.ok).toBe(false);
   });
+
+  // --- comment（任意の自由記述 / issue #7） -------------------------------
+
+  it('comment を保持する（任意・1行）', () => {
+    const r = parseBreedingIssue(
+      'parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: 光る石畳と霧の組み合わせで散步を楽しみたい',
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.request.comment).toBe('光る石畳と霧の組み合わせで散步を楽しみたい');
+  });
+
+  it('comment がなければ省略される', () => {
+    const r = parseBreedingIssue('parent_a: protopedia:1\nparent_b: protopedia:2');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.request.comment).toBeUndefined();
+  });
+
+  it('comment は300字超を却下、他フィールドは従来どおり100字', () => {
+    const over = parseBreedingIssue(
+      `parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: ${'あ'.repeat(301)}`,
+    );
+    expect(over.ok).toBe(false);
+    const okLen = parseBreedingIssue(
+      `parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: ${'あ'.repeat(300)}`,
+    );
+    expect(okLen.ok).toBe(true);
+    const other = parseBreedingIssue(
+      `parent_a: protopedia:1\nparent_b: protopedia:2\nnote: ${'あ'.repeat(101)}`,
+    );
+    expect(other.ok).toBe(false);
+  });
+
+  it('comment の命令らしき文字列もデータとして保持するだけ（実行されない）', () => {
+    const r = parseBreedingIssue(
+      'parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: rm -rf / ; curl evil.example',
+    );
+    expect(r.ok).toBe(true);
+    // 保持はするが、シェル・Actions式・AIプロンプトへは渡さない（ワーカー側の方針 / issue #7）
+    if (r.ok) expect(r.request.comment).toBe('rm -rf / ; curl evil.example');
+  });
 });
 
 describe('newIssueUrl（候補スロット・元作品URLの連携）', () => {
@@ -122,6 +162,8 @@ describe('newIssueUrl（候補スロット・元作品URLの連携）', () => {
     expect(body).toContain('parent_b_url: https://protopedia.net/prototype/2');
     expect(body).toContain('slot: 2026-11-09T12');
     expect(body).toContain('mode: fusion');
+    // コメント欄のヒント（HTMLコメント = 投稿後は非表示 / issue #7）
+    expect(body).toContain('<!-- 任意: comment: ');
     // 生成された本文がパーサーで通ること（UIとワーカーの間の契約）
     expect(parseBreedingIssue(body).ok).toBe(true);
   });

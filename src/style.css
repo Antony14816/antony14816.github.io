@@ -1033,3 +1033,122 @@ button.linkish:hover {
     flex-direction: column;
   }
 }
+
+/* --- /ideas アイデア一覧（issue #8） --------------------------------------- */
+
+.ideas-back {
+  margin: 10px 0 0;
+  font-size: 0.95rem;
+}
+
+ul.ideas-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 16px;
+}
+
+/* パネル内エントリ: ウィンドウの積みすぎを避け内線+下地で区別する */
+li.idea-item {
+  background: var(--window-2);
+  border: 2px solid var(--line);
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.idea-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.idea-badges .badge {
+  margin-left: 0;
+}
+
+/* 世代バッジは中立色（未実装・SAMPLEのバッジと混同しない） */
+.badge.gen {
+  background: var(--window);
+  border: 2px solid var(--line);
+  color: var(--text);
+}
+
+.idea-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.idea-summary {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.idea-parents {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.idea-parents .lbl {
+  font-family: var(--font-dot);
+  letter-spacing: 0.1em;
+  margin-right: 4px;
+}
+
+.idea-parents .cross {
+  margin: 0 6px;
+  color: var(--accent-ink);
+}
+
+.idea-meta {
+  font-size: 0.82rem;
+}
+
+.idea-foot {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--inner);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+/* 空状態（0件のときの申請誘導） */
+.ideas-empty {
+  margin-top: 16px;
+  padding: 20px 16px;
+  background: var(--window-2);
+  border: 2px dashed var(--line);
+  text-align: center;
+}
+
+.ideas-empty .empty-title {
+  font-family: var(--font-dot);
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.ideas-empty p {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+.ideas-foot {
+  margin-top: 28px;
+  font-size: 0.85rem;
+}
