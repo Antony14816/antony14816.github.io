@@ -106,6 +106,7 @@ slot: 2026-11-09T12                                 ← 申請時の候補スロ
 
 - **ダーク / ライト切り替え**: ヘッダー右上のボタンで切り替え、`localStorage['mashup-theme']` に保存。既定はOS設定。`index.html` の初期化スクリプトがCSS読込前に `data-theme` を設定し、テーマフラッシュを防ぐ。トークンは `:root` の `--lab-*`（固定パレット）とロールトークン（`--bg` / `--window` / `--line` / `--text` など）に集中管理。
 - **フォント**: 見出し・ボタン・ラベルは [DotGothic16](https://fonts.google.com/specimen/DotGothic16)、**本文は [Noto Sans JP](https://fonts.google.com/specimen/Noto+Sans+JP)** で可読性優先（**Google Fonts CDN への外部接続あり**。届かない環境ではゴシック/等幅にフォールバック）。
+- **アクセス解析**: **Google Tag Manager（`GTM-NLGLRR3T`）** をトップと `/ideas` の両方の `<head>` に配置し、`<body>` 直後に公式推奨の `noscript` iframe を配置（**外部接続先: `googletagmanager.com`**）。タグ本体はGTMコンテナ側で管理し、サイトにはIDだけを置く。ローカルの `npm run dev` / preview からもヒットが送信される（解析値に開発データが混ざる点に注意。除外はGTMコンテナ側のトリガー条件で行う）。
 - **ウィンドウ**: 太い外枠3px + 内側の細い線（inset）+ 右下ハードシャドウのRPG風。ガラス調・ネオンは不使用。
 - **候補パネル「本日の発明研究所」**: 画面完成イメージ準拠の角丸パネル + 3列画像カード（900pxで2列 / 560pxで1列）。
   画像タイルは下地 `--tile`（白系・両テーマ共通）で `object-fit: contain`・`loading=lazy`・読込失敗時は「画像なし」プレースホルダ（枠は維持）。
