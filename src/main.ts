@@ -1,11 +1,12 @@
 import './style.css';
-import type { Offspring, ParentId, ProtopediaWork, Workset } from '../lib/types.ts';
+import type { Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
 import { newIssueUrl, repoConfigFromEnv } from '../lib/config.ts';
+import { CANDIDATES_PER_SLOT, isCandidatesFile, type CandidatesFile } from '../lib/candidates.ts';
 import { slotKey } from '../lib/generation.ts';
 import rawOffspring from '../data/offspring.json';
+import rawCandidates from '../data/current-candidates.json';
 import sampleWorksJson from '../data/protopedia-sample.json';
 import rawSampleOffspring from '../data/offspring.sample.json';
-import rawWorkset from '../data/prototypes.json';
 
 // ---------------------------------------------------------------------------
 // データ読み込み
@@ -15,18 +16,17 @@ const offspring = (rawOffspring as unknown as Offspring[]).slice();
 const sampleWorks = (sampleWorksJson as { works: ProtopediaWork[] }).works;
 const sampleOffspring = (rawSampleOffspring as unknown as Offspring[]).slice();
 
-// 同期済みのProtoPedia作品（Actionsが scripts/sync-protopedia.ts で更新する）。
-// ブラウザからProtoPedia APIは呼ばない（docs/protopediaapi.md §7）。
-// 未同期なら開発用サンプルに落とし、[SAMPLE] 表記で本番と区別する。
-const workset = rawWorkset as Workset;
-const realWorks: ProtopediaWork[] = Array.isArray(workset.works)
-  ? workset.works.filter(
-      (w): w is ProtopediaWork =>
-        !!w && typeof w.id === 'string' && /^protopedia:\d{1,9}$/.test(w.id) && !!w.title,
-    )
-  : [];
-const usingSampleWorks = realWorks.length === 0;
-const works: ProtopediaWork[] = usingSampleWorks ? sampleWorks : realWorks;
+// 毎時の交配候補（data/current-candidates.json。Actions「Rotate candidates」が毎時更新）。
+// ブラウザからProtoPedia APIは呼ばない。ページ再読み込みで候補は変わらない。
+// 形が想定外なら開発用サンプルに落とし、[SAMPLE] 表記で本番と明確に区別する。
+const candidatesFile: CandidatesFile | null = isCandidatesFile(rawCandidates)
+  ? rawCandidates
+  : null;
+const usingSampleCandidates = candidatesFile === null;
+const candidates: ProtopediaWork[] = usingSampleCandidates
+  ? sampleWorks
+  : candidatesFile.candidates;
+
 // 本番データが0件の間はサンプル子作品も表示する（家系図が空にならないように。
 // 各データは sample フラグ・[SAMPLE]表記つきで本番と明確に区別される）。
 const showSampleOffspring = offspring.length === 0;
@@ -56,7 +56,11 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-const allNodes: (ProtopediaWork | Offspring)[] = [...works, ...children];
+// 家系図の完整性: サンプル子作品の親作品が候補カードに入っていない場合も、
+// 系譜として描けるよう参照だけ追加する（候補カードには表示しない）。
+const candidateIds = new Set(candidates.map((c) => c.id));
+const supportWorks = sampleWorks.filter((w) => !candidateIds.has(w.id));
+const allNodes: (ProtopediaWork | Offspring)[] = [...candidates, ...supportWorks, ...children];
 const nodeById = new Map<string, ProtopediaWork | Offspring>(allNodes.map((n) => [n.id, n]));
 
 function isOffspring(n: ProtopediaWork | Offspring | undefined): n is Offspring {
@@ -164,7 +168,7 @@ wrap.append(
     'div',
     { class: 'memo window' },
     el('div', { class: 'titlebar' }, el('span', {}, '所長のメモ')),
-    el('p', {}, '2つの発明をスロットに選んで「交配を申請」すると、GitHub Issueが開きます。'),
+    el('p', {}, '今時間の候補から2つ選んで「交配を申請」すると、GitHub Issueが開きます。'),
     el('p', {}, '生成は1時間に1枠。すべてAIが考えた未実装のアイデアです。'),
   ),
 );
@@ -180,13 +184,23 @@ wrap.append(
   ),
 );
 
-// サンプル表示中かどうか（owner/repo設定とは独立した条件）
-if (works.some((w) => w.sample) || children.some((c) => c.sample)) {
+// サンプル表示中かどうか（owner/repo設定とは独立した条件）。
+// 候補と子作品は別々に未同期になり得るので、表示場所ごとに正しく案内する。
+if (candidates.some((w) => w.sample)) {
   wrap.append(
     el(
       'div',
       { class: 'notice warn window' },
-      'ProtoPedia APIは未接続のため、現在は開発用サンプルデータを表示しています（[SAMPLE] 表記・実在の作品ではありません）。',
+      'ProtoPediaの候補データが未同期のため、候補は開発用サンプルです（[SAMPLE] 表記・実在の作品ではありません）。',
+    ),
+  );
+}
+if (children.some((c) => c.sample)) {
+  wrap.append(
+    el(
+      'div',
+      { class: 'notice warn window' },
+      '子作品がまだ0件のため、「最近誕生した発明」と「家系図」には開発用サンプルを表示しています（[SAMPLE] 表記・実在の生成結果ではありません）。',
     ),
   );
 }
@@ -201,92 +215,254 @@ if (!repoCfg) {
   );
 }
 
-// --- 交配マシン（親選択） ---------------------------------------------------
+// ---------------------------------------------------------------------------
+// ① 今時間の交配候補（毎時6件・全ユーザー共通。追加開発指示 §2/§3）
+// ---------------------------------------------------------------------------
 
-const pickerSection = el('section', {}, el('h2', {}, '親作品を選ぶ'));
+// 完成イメージ（tmp/CleanShot 2026-11-09 at 21.43.19.png）準拠:
+// パネル見出し「本日の発明研究所」+ ラテン小見出し + 右上バッジ。
+// その下に画像中心の3列カード（画像タイルが主役、キャプションは下に添える）。
+const candSection = el('section', { class: 'cand-section' });
+const stateBadge = el('span', { class: 'chip' });
+const candMeta = el('div', { class: 'cand-meta' });
+const grid = el('div', { class: 'candidates' });
 
-const picker = el('div', { class: 'picker' });
-
-/** 検索クエリに一致するか（名前・概要・作者・タグ / 大文字小文字は無視）。 */
-function matchesQuery(w: ProtopediaWork | Offspring, q: string): boolean {
-  if (!q) return true;
-  const parts = [w.title, w.summary];
-  if ('authors' in w && Array.isArray(w.authors)) parts.push(...w.authors);
-  if ('tags' in w && Array.isArray(w.tags)) parts.push(...w.tags);
-  return parts.join(' ').toLowerCase().includes(q);
+/** slot "YYYY-MM-DDTHH"（UTC）を日本時間の表示に変換する。 */
+function fmtJst(slot: string): string {
+  const ms = Date.parse(`${slot}:00:00Z`);
+  if (Number.isNaN(ms)) return slot;
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(ms));
 }
 
-/** セレクトの選択肢を（検索クエリで絞って）作り直す。 */
-function fillParentOptions(sel: HTMLSelectElement, q: string): void {
-  const prev = sel.value;
-  // 絞り込みに一致しない場合でも、選択中の作品はリストに残す
-  // （検索中に選択が黙って解除されるのを防ぐ）。
-  const include = (w: ProtopediaWork | Offspring): boolean =>
-    matchesQuery(w, q) || w.id === prev;
-
-  sel.replaceChildren(el('option', { value: '' }, '— 選択してください —'));
-  const groupProto = el('optgroup', { label: 'ProtoPedia作品（第0世代）' });
-  const groupChild = el('optgroup', { label: '生まれた子作品' });
-  for (const w of works) {
-    if (!include(w)) continue;
-    const by = w.authors && w.authors.length > 0 ? ` / ${w.authors[0]}` : '';
-    groupProto.append(el('option', { value: w.id }, `${w.title}${by} (${w.id})`));
-  }
-  for (const c of children) {
-    if (!include(c)) continue;
-    groupChild.append(
-      el('option', { value: c.id }, `第${c.generation}世代 ${c.title} (${c.id})`),
+if (candidatesFile) {
+  const f = candidatesFile;
+  candMeta.append(
+    el(
+      'div',
+      {},
+      '候補スロット: ',
+      el('span', { class: 'value' }, f.slot),
+      '（UTC。右上のバッジと同じ枠に切り替わります）',
+    ),
+    el('div', {}, '候補生成: ', el('span', { class: 'value' }, f.generatedAt), '（Actionsの実行結果）'),
+    el(
+      'div',
+      {},
+      '次回の候補更新予定: ',
+      el('span', { class: 'value' }, `${f.nextSlot}:00 UTC`),
+      `（日本時間 ${fmtJst(f.nextSlot)} 頃・毎時更新）`,
+    ),
+  );
+  // Actionsの実行遅延はJSONの値（実行結果）ベースで表現する（端末時計で補完しない）
+  const nextMs = Date.parse(`${f.nextSlot}:00:00Z`);
+  if (Number.isFinite(nextMs) && Date.now() > nextMs) {
+    candMeta.append(
+      el('div', { class: 'stale' }, '⚠ 候補更新が遅れています（Actionsの実行完了後に切り替わります）。'),
     );
   }
-  sel.append(groupProto, groupChild);
-  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+  if (f.candidates.length < CANDIDATES_PER_SLOT) {
+    candMeta.append(
+      el('div', { class: 'hint' }, `現在の候補は${f.candidates.length}件です（最大${CANDIDATES_PER_SLOT}件）。`),
+    );
+  }
+} else {
+  candMeta.append(
+    el('div', { class: 'hint' }, `候補データ未同期: 開発用サンプル${candidates.length}件を表示中です。`),
+  );
+}
+candMeta.append(
+  el('div', { class: 'hint' }, '候補は1時間ごとに差し替わります。ページを再読み込みしても候補は変わりません。'),
+);
+// 右上バッジ: サンプル表示中か本番候補かを常に見せる
+stateBadge.textContent = usingSampleCandidates
+  ? '開発用サンプル'
+  : `毎時${CANDIDATES_PER_SLOT}件・全ユーザー共通`;
+if (usingSampleCandidates) stateBadge.classList.add('chip-warn');
+
+// --- 選択状態（親A / 親B） -------------------------------------------------
+
+let pickA: string | null = null;
+let pickB: string | null = null;
+
+interface PickControls {
+  /** 状態クラス（is-a / is-b）を付ける要素（候補カード or 子作品の行） */
+  host: HTMLElement;
+  /** 「親A選択中」バッジ（候補カードのみ。子作品の行には無し） */
+  badge: HTMLElement | null;
+  a: HTMLButtonElement;
+  b: HTMLButtonElement;
 }
 
-function parentSelect(id: string, labelText: string): HTMLSelectElement {
-  const sel = el('select', { id });
-  const field = el('div', {}, el('label', { for: id }, labelText), sel);
-  picker.append(field);
-  fillParentOptions(sel, '');
-  return sel;
+const pickRegistry = new Map<string, PickControls>();
+
+function pickButton(slot: 'a' | 'b', id: string, stopBubble: boolean): HTMLButtonElement {
+  const btn = el(
+    'button',
+    {
+      class: 'pick',
+      type: 'button',
+      'aria-pressed': 'false',
+      'aria-label': `${slot === 'a' ? '親A' : '親B'}にする: ${label(nodeById.get(id))}`,
+    },
+    slot === 'a' ? 'Aにする' : 'Bにする',
+  ) as HTMLButtonElement;
+  btn.addEventListener('click', (e) => {
+    if (stopBubble) e.stopPropagation(); // 子作品の行クリック（詳細表示）と競合させない
+    togglePick(slot, id);
+  });
+  return btn;
 }
 
-// --- 作品検索（発明図鑑の入口。API同期済み作品が増えてから価値が出る） -------
-const filterInput = el('input', {
-  id: 'work-filter',
-  type: 'search',
-  placeholder: '例: 光る地図, 音, Arduino',
-}) as HTMLInputElement;
-const filterCount = el('span', { class: 'hint' });
-const filterField = el(
+function togglePick(slot: 'a' | 'b', id: string): void {
+  if (slot === 'a') {
+    pickA = pickA === id ? null : id;
+    if (pickA && pickB === id) pickB = null; // 同じ作品をAとBに同時に指定しない
+  } else {
+    pickB = pickB === id ? null : id;
+    if (pickB && pickA === id) pickA = null;
+  }
+  updateSelectionUI();
+}
+
+/** 作品カードのサムネイル枠。画像が無く・届かなくても枠は維持する（レイアウト崩れ防止）。 */
+function thumbNode(w: ProtopediaWork): HTMLElement {
+  const box = el('div', { class: 'thumb' });
+  const placeholder = () => box.replaceChildren(el('div', { class: 'thumb-ph' }, '画像なし'));
+  if (!w.mainUrl) {
+    placeholder();
+    return box;
+  }
+  const img = el('img', {
+    src: w.mainUrl,
+    alt: `${w.title}の作品画像（ProtoPedia）`,
+    loading: 'lazy',
+  }) as HTMLImageElement;
+  img.addEventListener('error', () => {
+    img.remove();
+    placeholder();
+  });
+  box.append(img);
+  return box;
+}
+
+function buildCandidateCard(w: ProtopediaWork, index: number): HTMLElement {
+  const card = el('article', { class: 'candidate', 'data-id': w.id });
+  card.append(thumbNode(w));
+
+  const badge = el('span', { class: 'badge pick-state' }, '');
+  badge.hidden = true; // 選択中のみ表示（色だけに依存せずテキストで状態を示す）
+
+  const idx = el('div', { class: 'card-index' }, `作品 No.${String(index + 1).padStart(2, '0')}`);
+  const h3 = el('h3', {}, w.title, badge);
+  const author = el(
+    'div',
+    { class: 'author' },
+    w.authors && w.authors.length > 0 ? `作者: ${w.authors.join(' / ')}` : '作者: （不明）',
+  );
+  const summary = el('p', { class: 'summary' }, w.summary || '（概要なし）');
+  const link = el('a', { href: w.sourceUrl, target: '_blank', rel: 'noopener noreferrer' }, 'ProtoPediaで見る ↗');
+
+  const btnA = pickButton('a', w.id, false);
+  const btnB = pickButton('b', w.id, false);
+  const picks = el('div', { class: 'picks' }, btnA, btnB);
+  const foot = el('div', { class: 'card-foot' }, link, picks);
+
+  const body = el('div', { class: 'card-body' }, idx, h3, author, summary, foot);
+  card.append(body);
+
+  pickRegistry.set(w.id, { host: card, badge, a: btnA, b: btnB });
+  return card;
+}
+
+candidates.forEach((w, i) => grid.append(buildCandidateCard(w, i)));
+if (candidates.length === 0) {
+  grid.append(el('div', { class: 'empty' }, '候補がありません（データ未同期です）。'));
+}
+candSection.append(
+  el(
+    'div',
+    { class: 'lab-panel' },
+    el(
+      'div',
+      { class: 'lab-head' },
+      el(
+        'div',
+        { class: 'lab-titles' },
+        el('h2', {}, '本日の発明研究所'),
+        el('p', { class: 'lab-sub' }, 'LAB / INVENTION CANDIDATES'),
+      ),
+      stateBadge,
+    ),
+    candMeta,
+    grid,
+  ),
+);
+wrap.append(candSection);
+
+// ---------------------------------------------------------------------------
+// ② 交配マシン（選択状態・申請・稼働状況・交配待ち）
+// ---------------------------------------------------------------------------
+
+const machineSection = el('section', {}, el('h2', {}, '交配マシン'));
+
+const statusA = el('span', { class: 'status-val empty' }, '（未選択）');
+const statusB = el('span', { class: 'status-val empty' }, '（未選択）');
+const statusRow = el(
   'div',
-  { class: 'filter' },
-  el('label', { for: 'work-filter' }, '作品を検索（名前・作者・タグ・概要）'),
-  el('div', { class: 'filter-row' }, filterInput, filterCount),
+  { class: 'status-row' },
+  el('div', { class: 'side' }, el('span', { class: 'side-label' }, '親A'), statusA),
+  el('span', { class: 'cross', 'aria-hidden': 'true' }, '×'),
+  el('div', { class: 'side' }, el('span', { class: 'side-label' }, '親B'), statusB),
 );
 
-function updateFilterCount(q: string): void {
-  const n = [...works, ...children].filter((w) => matchesQuery(w, q)).length;
-  filterCount.textContent = q
-    ? `${n}件がヒット`
-    : `全${works.length + children.length}件から選べます`;
-}
+// 稼働状況と交配待ち（DESIGN.md §1: ファーストビュー圏で分かるように）
+const nowSlot = slotKey(new Date());
+const slotTaken = children.some((c) => c.slot === nowSlot && !c.sample);
+const statusNote = el(
+  'div',
+  { class: 'slot' },
+  el(
+    'div',
+    {},
+    '現在の交配枠（UTC）: ',
+    el('span', { class: 'value' }, nowSlot),
+    slotTaken ? ' — この枠はすでに1件生成済みです。' : ' — この枠はまだ空きがあります。',
+  ),
+  el('div', {}, '1時間に1枠は全ユーザー共有です（ユーザーごとに毎時1回ではありません）。'),
+  repoCfg
+    ? el(
+        'div',
+        {},
+        '交配申請中の組み合わせは公開Issueで確認できます: ',
+        el(
+          'a',
+          {
+            href: `https://github.com/${repoCfg.owner}/${repoCfg.repo}/issues?q=is%3Aissue+state%3Aopen`,
+            target: '_blank',
+            rel: 'noopener',
+          },
+          '交配待ちのIssue一覧 →',
+        ),
+      )
+    : el('div', { class: 'empty' }, '交配待ちのIssue一覧はリポジトリ設定後に表示されます。'),
+);
 
-const selectA = parentSelect('parent-a', '親作品 A（スロットA）');
-const pickerCross = el('div', { class: 'cross' }, '×');
-picker.append(pickerCross); // grid順: A / × / B
-const selectB = parentSelect('parent-b', '親作品 B（スロットB）');
-
-const actions = el('div', { class: 'actions' });
 const breedBtn = el('button', { class: 'breed', type: 'button' }, '交配を申請') as HTMLButtonElement;
 const hint = el('span', { class: 'hint' });
-actions.append(breedBtn, hint);
+const actions = el('div', { class: 'actions' }, breedBtn, hint);
 
-const catalogHint = el(
+const machineHint = el(
   'div',
   { class: 'hint catalog' },
-  usingSampleWorks
-    ? `作品一覧は開発用サンプル${works.length}件（ProtoPedia未同期。同期Workflowで置き換わります）`
-    : `作品一覧: ProtoPedia ${works.length}件${workset.syncedAt ? `（最終同期: ${workset.syncedAt}）` : ''}`,
+  usingSampleCandidates
+    ? '候補は開発用サンプルです（実在の作品ではありません）。'
+    : '候補カードの「Aにする」「Bにする」で2つ選んで申請できます。',
 );
 
 const machine = el(
@@ -304,83 +480,81 @@ const machine = el(
       el('span', { class: 'lamp coral' }),
     ),
   ),
-  catalogHint,
-  filterField,
-  picker,
+  machineHint,
+  statusRow,
+  statusNote,
   actions,
 );
-pickerSection.append(machine);
-wrap.append(pickerSection);
+machineSection.append(machine);
+wrap.append(machineSection);
+
+function pickText(id: string | null): string {
+  if (!id) return '（未選択）';
+  const n = nodeById.get(id);
+  return n ? `${n.title} (${id})` : id;
+}
 
 function currentPair(): [ParentId, ParentId] | null {
-  const a = selectA.value;
-  const b = selectB.value;
-  if (!a || !b || a === b) return null;
-  return [a as ParentId, b as ParentId];
+  if (!pickA || !pickB || pickA === pickB) return null;
+  return [pickA as ParentId, pickB as ParentId];
 }
 
 function refreshBreedButton(): void {
   const pair = currentPair();
   breedBtn.disabled = !pair || !repoCfg;
   if (!pair) {
-    hint.textContent = selectA.value && selectA.value === selectB.value
-      ? '親Aと親Bは別の作品を選んでください。'
-      : '2つの作品を選ぶとGitHub Issueの作成画面が開きます。';
+    hint.textContent =
+      pickA && pickB && pickA === pickB
+        ? '親Aと親Bは別の作品を選んでください。'
+        : '候補カードから2つ選ぶとGitHub Issueの作成画面が開きます。';
+  } else if (!repoCfg) {
+    hint.textContent = 'owner/repo未設定のため申請できません（上の案内を参照）。';
   } else {
-    hint.textContent = `${pair[0]} × ${pair[1]} の組み合わせで申請します。`;
+    hint.textContent = `${pair[0]} × ${pair[1]}${
+      candidatesFile ? `（候補スロット ${candidatesFile.slot}）` : ''
+    } の組み合わせで申請します。`;
   }
 }
 
-selectA.addEventListener('change', refreshBreedButton);
-selectB.addEventListener('change', refreshBreedButton);
-
-filterInput.addEventListener('input', () => {
-  const q = filterInput.value.trim().toLowerCase();
-  fillParentOptions(selectA, q);
-  fillParentOptions(selectB, q);
-  updateFilterCount(q);
+function updateSelectionUI(): void {
+  for (const [id, c] of pickRegistry) {
+    const isA = pickA === id;
+    const isB = pickB === id;
+    c.host.classList.toggle('is-a', isA);
+    c.host.classList.toggle('is-b', isB);
+    c.a.setAttribute('aria-pressed', String(isA));
+    c.b.setAttribute('aria-pressed', String(isB));
+    if (c.badge) {
+      c.badge.hidden = !(isA || isB);
+      c.badge.textContent = isA ? '親A選択中' : isB ? '親B選択中' : '';
+    }
+  }
+  statusA.textContent = pickText(pickA);
+  statusA.classList.toggle('empty', !pickA);
+  statusB.textContent = pickText(pickB);
+  statusB.classList.toggle('empty', !pickB);
   refreshBreedButton();
-});
-updateFilterCount('');
+}
+
 breedBtn.addEventListener('click', () => {
   const pair = currentPair();
   if (!pair || !repoCfg) return;
-  window.open(newIssueUrl(repoCfg, pair[0], pair[1]), '_blank', 'noopener');
+  const wa = nodeById.get(pair[0]);
+  const wb = nodeById.get(pair[1]);
+  window.open(
+    newIssueUrl(repoCfg, pair[0], pair[1], {
+      slot: candidatesFile?.slot,
+      parentAUrl: wa && !isOffspring(wa) ? wa.sourceUrl : undefined,
+      parentBUrl: wb && !isOffspring(wb) ? wb.sourceUrl : undefined,
+    }),
+    '_blank',
+    'noopener',
+  );
 });
-refreshBreedButton();
 
-// --- 次の交配枠 ------------------------------------------------------------
-
-const slotSection = el('section', {}, el('h2', {}, '交配待ち・次の枠'));
-const slotPanel = el('div', { class: 'slot window' });
-const nowSlot = slotKey(new Date());
-const slotTaken = children.some((c) => c.slot === nowSlot && !c.sample);
-slotPanel.append(
-  el('div', {}, '現在の時間枠（UTC）: ', el('span', { class: 'value' }, nowSlot)),
-  el(
-    'div',
-    {},
-    slotTaken
-      ? 'この枠はすでに1件生成済みです。次の枠で処理されます。'
-      : 'この枠はまだ空きがあります。',
-  ),
-  el('div', {}, '1時間に1枠は全ユーザー共有です（ユーザーごとに毎時1回ではありません）。'),
-  repoCfg
-    ? el(
-        'a',
-        {
-          href: `https://github.com/${repoCfg.owner}/${repoCfg.repo}/issues`,
-          target: '_blank',
-          rel: 'noopener',
-        },
-        '交配待ちのIssue一覧 →',
-      )
-    : el('div', { class: 'empty' }, '交配待ちのIssue一覧はリポジトリ設定後に表示されます。'),
-);
-slotSection.append(slotPanel);
-wrap.append(slotSection);
-
-// --- 最近誕生した発明 -------------------------------------------------------
+// ---------------------------------------------------------------------------
+// ③ 最近誕生した発明（直近の交配結果）
+// ---------------------------------------------------------------------------
 
 const listSection = el('section', {}, el('h2', {}, '最近誕生した発明'));
 const list = el('ul', { class: 'offspring' });
@@ -407,6 +581,11 @@ if (sorted.length === 0) {
       ),
     );
     li.addEventListener('click', () => selectNode(c.id));
+    // 子作品も親にできる（AGENTS.md の完成形）。カードと同じ A/B 操作で選択できる。
+    const btnA = pickButton('a', c.id, true);
+    const btnB = pickButton('b', c.id, true);
+    li.append(el('div', { class: 'li-picks' }, btnA, btnB));
+    pickRegistry.set(c.id, { host: li, badge: null, a: btnA, b: btnB });
     list.append(li);
   }
 }
@@ -639,3 +818,4 @@ function selectNode(id: string): void {
 }
 
 renderPedigree();
+updateSelectionUI();

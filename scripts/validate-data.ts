@@ -2,7 +2,8 @@
  * data/offspring.json の検証。
  * 使い方: npm run validate-data
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { isCandidatesFile, nextSlotKey } from '../lib/candidates.ts';
 import { computeGeneration, isAncestorDescendantPair, nextOffspringId } from '../lib/generation.ts';
 import { samePair } from '../lib/issue.ts';
 import type { Offspring, Workset } from '../lib/types.ts';
@@ -128,4 +129,83 @@ for (const w of workset.works) {
 }
 console.log(
   `✅ prototypes.json ${workset.works.length}件 OK（同期: ${workset.syncedAt ?? '未実施'}）`,
+);
+
+// --- data/sample-prototypes.json（試作取得データ・任意） --------------------
+// 存在しなくてよい。壊れた形だけを検出する。候補プールの一部として数える。
+
+const SAMPLE_FILE = new URL('../data/sample-prototypes.json', import.meta.url);
+const poolIds = new Set(workIds); // prototypes.json ∪ sample-prototypes.json = 候補プール
+
+if (existsSync(SAMPLE_FILE)) {
+  let sampleRaw: unknown;
+  try {
+    sampleRaw = JSON.parse(readFileSync(SAMPLE_FILE, 'utf8'));
+  } catch (e) {
+    fail(`data/sample-prototypes.json を読めません: ${String(e)}`);
+  }
+  if (typeof sampleRaw !== 'object' || sampleRaw === null) {
+    fail('sample-prototypes.json はオブジェクトである必要があります');
+  }
+  const sample = sampleRaw as Workset;
+  if (sample.schemaVersion !== 1) fail('sample-prototypes.json: schemaVersion が 1 ではありません');
+  if (!Array.isArray(sample.works)) fail('sample-prototypes.json: works が配列ではありません');
+
+  for (const w of sample.works) {
+    const wfail = (msg: string): never =>
+      fail(`sample-prototypes.json ${w?.id ?? '(不明)'}: ${msg}`);
+    if (typeof w?.id !== 'string' || !/^protopedia:\d{1,9}$/.test(w.id)) wfail('id 形式が不正');
+    if (poolIds.has(w.id)) wfail('id がプールに重複しています');
+    if (w.generation !== 0) wfail('generation は 0 である必要があります');
+    if (typeof w.title !== 'string' || w.title.length === 0) wfail('title が空');
+    if (typeof w.sourceUrl !== 'string' || !w.sourceUrl.startsWith('https://protopedia.net/')) {
+      wfail(`sourceUrl が想定外: ${String(w.sourceUrl)}`);
+    }
+    if (w.sample) wfail('実API取得データに sample フラグは付かない');
+    // 仕様§10: 利用条件が確認できない作品は保存しない方針（fetch時のフィールドと二重確認）
+    if (typeof w.licenseType !== 'string' || w.licenseType.length === 0) {
+      wfail('licenseType が無い（利用条件を確認できない作品）');
+    }
+    poolIds.add(w.id);
+  }
+  console.log(`✅ sample-prototypes.json ${sample.works.length}件 OK`);
+} else {
+  console.log('ℹ️ sample-prototypes.json は無し（npm run fetch:sample で取得できます）');
+}
+
+// --- data/current-candidates.json（毎時の交配候補） --------------------------
+
+const CAND_FILE = new URL('../data/current-candidates.json', import.meta.url);
+let candRaw: unknown;
+try {
+  candRaw = JSON.parse(readFileSync(CAND_FILE, 'utf8'));
+} catch {
+  fail('data/current-candidates.json がありません（npm run rotate:candidates を実行してください）');
+}
+if (!isCandidatesFile(candRaw)) {
+  fail('current-candidates.json の形式が不正です（npm run rotate:candidates で作り直してください）');
+}
+const cand = candRaw;
+
+// slot/nextSlotの整合（Actionsの実行結果として記録された値同士が一致しているか）
+if (cand.nextSlot !== nextSlotKey(cand.slot)) {
+  fail(`current-candidates.json: nextSlot（${cand.nextSlot}）が slot（${cand.slot}）の次枠と一致しません`);
+}
+if (Number.isNaN(Date.parse(cand.generatedAt))) {
+  fail('current-candidates.json: generatedAt が日時として読めません');
+}
+// sourceは実行環境の絶対パスを持ち込まない（再現性の担保）
+if (cand.source.startsWith('/') || cand.source.includes('..')) {
+  fail(`current-candidates.json: source がリポジトリ相対ではありません: ${cand.source}`);
+}
+for (const c of cand.candidates) {
+  if (c.sample) fail(`current-candidates.json: 候補 ${c.id} に sample フラグが付いています`);
+  if (!poolIds.has(c.id)) {
+    fail(
+      `current-candidates.json: 候補 ${c.id} が保存済み作品プールに存在しません（npm run rotate:candidates で候補を更新してください）`,
+    );
+  }
+}
+console.log(
+  `✅ current-candidates.json slot=${cand.slot} 候補${cand.candidates.length}件 OK（次回: ${cand.nextSlot} / source: ${cand.source}）`,
 );

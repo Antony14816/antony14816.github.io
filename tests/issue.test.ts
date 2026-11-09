@@ -56,6 +56,83 @@ describe('parseBreedingIssue', () => {
     // run は許可フィールドではないため読み込まれない
     expect(r.ok).toBe(true);
   });
+
+  // --- 候補スロット・元作品URL（追加開発指示 §8） ---------------------------
+
+  it('slot を保持する（形式 OK のときだけ）', () => {
+    const r = parseBreedingIssue(
+      'parent_a: protopedia:1\nparent_b: protopedia:2\nslot: 2026-11-09T12',
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.request.slot).toBe('2026-11-09T12');
+  });
+
+  it('slot 形式が不正なら却下する', () => {
+    expect(
+      parseBreedingIssue('parent_a: protopedia:1\nparent_b: protopedia:2\nslot: today').ok,
+    ).toBe(false);
+    expect(
+      parseBreedingIssue('parent_a: protopedia:1\nparent_b: protopedia:2\nslot: 2026-11-09').ok,
+    ).toBe(false);
+  });
+
+  it('parent_a_url / parent_b_url は https のみ受理し http は却下する', () => {
+    const ok = parseBreedingIssue(
+      [
+        'parent_a: protopedia:1',
+        'parent_b: protopedia:2',
+        'parent_a_url: https://protopedia.net/prototype/1',
+        'parent_b_url: https://protopedia.net/prototype/2',
+      ].join('\n'),
+    );
+    expect(ok.ok).toBe(true);
+
+    const bad = parseBreedingIssue(
+      [
+        'parent_a: protopedia:1',
+        'parent_b: protopedia:2',
+        'parent_a_url: http://protopedia.net/prototype/1',
+      ].join('\n'),
+    );
+    expect(bad.ok).toBe(false);
+
+    const evil = parseBreedingIssue(
+      [
+        'parent_a: protopedia:1',
+        'parent_b: protopedia:2',
+        'parent_b_url: javascript:alert(1)',
+      ].join('\n'),
+    );
+    expect(evil.ok).toBe(false);
+  });
+});
+
+describe('newIssueUrl（候補スロット・元作品URLの連携）', () => {
+  it('Issue本文に親ID・元作品URL・slot が含まれる', async () => {
+    const { newIssueUrl } = await import('../lib/config.ts');
+    const url = newIssueUrl({ owner: 'o', repo: 'r' }, 'protopedia:1', 'protopedia:2', {
+      slot: '2026-11-09T12',
+      parentAUrl: 'https://protopedia.net/prototype/1',
+      parentBUrl: 'https://protopedia.net/prototype/2',
+    });
+    const body = new URL(url).searchParams.get('body') ?? '';
+    expect(body).toContain('parent_a: protopedia:1');
+    expect(body).toContain('parent_b: protopedia:2');
+    expect(body).toContain('parent_a_url: https://protopedia.net/prototype/1');
+    expect(body).toContain('parent_b_url: https://protopedia.net/prototype/2');
+    expect(body).toContain('slot: 2026-11-09T12');
+    expect(body).toContain('mode: fusion');
+    // 生成された本文がパーサーで通ること（UIとワーカーの間の契約）
+    expect(parseBreedingIssue(body).ok).toBe(true);
+  });
+
+  it('オプションなしの従来形式もそのまま通る', async () => {
+    const { newIssueUrl } = await import('../lib/config.ts');
+    const url = newIssueUrl({ owner: 'o', repo: 'r' }, 'protopedia:1', 'protopedia:2');
+    const body = new URL(url).searchParams.get('body') ?? '';
+    expect(body).not.toContain('slot:');
+    expect(parseBreedingIssue(body).ok).toBe(true);
+  });
 });
 
 describe('samePair', () => {

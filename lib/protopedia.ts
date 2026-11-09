@@ -9,8 +9,17 @@
  * - リトライは1ページにつき最大1回。無限リトライはしない。
  * - ページ数・総件数に上限を設ける（レート制限・暴走防止）。
  *
+ * 実接続で確認済み（2026-11）:
+ * - レスポンス形状は `{metadata, count, links, results}`。count はページ内件数（総数ではない）。
+ * - 件数外の offset は HTTP 200 + count:0 で results キー自体が無い（=空ページ）。
+ * - users / tags は "|"-区切り文字列。作者は "名前@ユーザーID" 形式。
+ * - licenseType は数値enum（観測値は 1 のみ = 作品ページ表示「CC BY 4+」）。
+ * - 作品ページURLは `https://protopedia.net/prototype/<id>`（id=1 のページとAPI一致を確認）。
+ * - カタログ総数は 5,100件超（offset=5000 で100件 / offset=9990 で0件）。
+ *
  * 未検証事項（docs/protopediaapi.md §11）:
- * - releaseFlg の値の意味、作品ページURLの実パス、レート制限の実値は実接続で確認する。
+ * - releaseFlg の実値の意味（観測値は常に 2。0/1 の意味は不明）。
+ * - レート制限の実値。ページ間隔を既定100msで空けて対応。
  */
 import { renameSync, writeFileSync } from 'node:fs';
 import type { ProtopediaWork, Workset } from './types.ts';
@@ -18,11 +27,15 @@ import type { ProtopediaWork, Workset } from './types.ts';
 export const PROTOPEDIA_API_BASE = 'https://protopedia.net/v2/api';
 export const PROTOPEDIA_SITE_BASE = 'https://protopedia.net';
 
-/** 取得上限（デフォルト）。必要なら呼び出し側で変える。 */
-export const DEFAULT_MAX_WORKS = 5000;
+/** 取得上限（デフォルト）。必要なら呼び出し側で変える。
+ * 実測でカタログ総数は 5,100件超（offset=5000 で100件、offset=9990 で0件）。
+ * 10,000 でも超える場合は fetchAllWorks の truncated が立つので同期ログで確認する。 */
+export const DEFAULT_MAX_WORKS = 10_000;
 export const DEFAULT_PAGE_SIZE = 100;
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_RETRIES = 1;
+/** レート制限に配慮したページ間の待機（実測の上限は未確認のため控えめに空ける）。 */
+export const DEFAULT_PAGE_DELAY_MS = 100;
 
 // フィールド長の上限（実APIの上限は未確認のためこちらで強制する）
 const CAP_TITLE = 200;
@@ -97,6 +110,13 @@ function toIdNumber(v: unknown): number | null {
 }
 
 /**
+ * licenseType のラベル対応表。
+ * 実API（2026-11実測）では数値enumで、観測された値は 1 だけ。
+ * 1 は作品ページ id=1 の表示「CC BY 4+」と照合済み。未知の数値は捏造せず未保存。
+ */
+const LICENSE_LABELS: Record<number, string> = { 1: 'CC BY 4+' };
+
+/**
  * releaseFlg の公開判定。
  * 仕様書に値の定義がないため: 欠損は公開として扱う（要実測確認）、
  * 明示的な非公開値のみ除外する。
@@ -131,7 +151,7 @@ function resolveSourceUrl(raw: Record<string, unknown>, idNum: number): string {
       /* fall through */
     }
   }
-  // 作品ページURLの実パスは未検証（docs §11）。実接続で確認する。
+  // 作品ページURLの実パス。実接続で確認済み（id=1 のページとAPIの作品が一致）。
   return `${PROTOPEDIA_SITE_BASE}/prototype/${String(idNum)}`;
 }
 
@@ -141,9 +161,19 @@ function toTextList(
   maxItems: number,
   maxLen: number,
 ): string[] {
-  if (!Array.isArray(value)) return [];
+  // 実API（2026-11実測）では users/tags は "|"-区切りの文字列
+  // （例 "作者A@12|作者B@34", "タグ1|タグ2"）。配列形式は仕様書の想定なので両対応。
+  const list: unknown[] =
+    typeof value === 'string'
+      ? value
+          .split('|')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : Array.isArray(value)
+        ? value
+        : [];
   const out: string[] = [];
-  for (const item of value) {
+  for (const item of list) {
     if (out.length >= maxItems) break;
     let t = '';
     if (typeof item === 'string') {
@@ -192,20 +222,34 @@ export function normalizeWork(raw: unknown): ProtopediaWork | null {
   const mainUrl = isAllowedHttpUrl(r.mainUrl);
   if (mainUrl) work.mainUrl = mainUrl;
 
-  const authors = toTextList(r.users, ['userNm', 'userName', 'nm', 'name'], MAX_AUTHORS, CAP_NAME);
+  // 作者は実APIで "|"-区切りの "表示名@ユーザーID" 形式
+  // （例 "ひさやん@hisayan"。表示名が空なら "@handle" のみ）。
+  // クレジット表示に使うためハンドルは情報なので原文のまま保持する。
+  const authors = toTextList(
+    r.users,
+    ['userNm', 'userName', 'nm', 'name'],
+    MAX_AUTHORS,
+    CAP_NAME,
+  )
+    .map((a) => a.trim())
+    .filter((a, i, arr) => a.length > 0 && arr.indexOf(a) === i);
   if (authors.length > 0) work.authors = authors;
 
   const tags = toTextList(r.tags, ['tagNm', 'tagName', 'nm', 'name'], MAX_TAGS, CAP_NAME);
   if (tags.length > 0) work.tags = tags;
 
-  const license = stripToText(r.licenseType, CAP_LICENSE);
+  const license =
+    typeof r.licenseType === 'number'
+      ? (LICENSE_LABELS[r.licenseType] ?? '')
+      : stripToText(r.licenseType, CAP_LICENSE);
   if (license) work.licenseType = license;
 
   const system = stripToText(r.systemDescription, CAP_LONG_TEXT);
   if (system) work.systemDescription = system;
 
-  const desc = stripToText(r.freeComment, CAP_LONG_TEXT);
-  if (desc) work.description = desc;
+  // freeComment（詳細説明）は保存しない（仕様書§7「詳細説明を無制限に保存せず」）。
+  // summary が空のときだけ冒頭を概要として使う（上の summary で処理済み）。
+  // 交配時に入力が必要な場合はワーカーが prototypeId でAPIから直接取得する（§6.2）。
 
   return work;
 }
@@ -248,7 +292,7 @@ async function requestJson(
   }
 }
 
-/** レスポンス本体から配列を探す（構造差異に暫定対応。実測で確定させる）。 */
+/** レスポンス本体から配列を探す（実測形状に確定: `{metadata, count, links, results}`）。 */
 function extractResults(body: unknown): unknown[] | null {
   if (Array.isArray(body)) return body;
   if (body && typeof body === 'object') {
@@ -257,6 +301,10 @@ function extractResults(body: unknown): unknown[] | null {
       const v = b[key];
       if (Array.isArray(v)) return v;
     }
+    // 実測（2026-11）: カタログ件数を超える offset では HTTP 200 + count:0 で
+    // results キー自体が返らない。これは「最終ページの直後」= 正常な空ページなので、
+    // 例外にせず空配列として扱いページングを終了させる。
+    if (b.count === 0) return [];
   }
   return null;
 }
@@ -268,6 +316,12 @@ export interface FetchAllOptions {
   /** ページ単位の再試行回数（既定1回。0で無効） */
   retries?: number;
   timeoutMs?: number;
+  /** ページ間の待機ms（既定100。テストでは0にできる） */
+  pageDelayMs?: number;
+  /** 取得ページ数の上限（未指定/0 = 上限なし。試作取得での暴走防止に使う） */
+  maxPages?: number;
+  /** 最初のオフセット（既定0。試作取得で対象範囲をずらすとき用） */
+  offsetStart?: number;
   fetchImpl?: FetchImpl;
 }
 
@@ -276,6 +330,8 @@ export interface FetchAllResult {
   pages: number;
   /** 正規化で落ちた件数（非公開・不正レコード） */
   dropped: number;
+  /** 同一IDの重複レコード（offset無視等のサーバ側事故を想定） */
+  duplicates: number;
   /** 上限に達して打ち切ったか */
   truncated: boolean;
 }
@@ -292,17 +348,23 @@ export async function fetchAllWorks(opts: FetchAllOptions): Promise<FetchAllResu
     maxWorks = DEFAULT_MAX_WORKS,
     retries = DEFAULT_RETRIES,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    pageDelayMs = DEFAULT_PAGE_DELAY_MS,
+    maxPages = 0,
+    offsetStart = 0,
     fetchImpl = fetch,
   } = opts;
 
   if (!token) throw new Error('APIトークンが設定されていません（PROTOPEDIA_API_V2_TOKEN）');
 
   const works: ProtopediaWork[] = [];
+  const seenIds = new Set<string>();
   let pages = 0;
   let dropped = 0;
-  let offset = 0;
+  let duplicates = 0;
+  let offset = offsetStart;
 
-  while (works.length < maxWorks) {
+  while (works.length < maxWorks && (maxPages <= 0 || pages < maxPages)) {
+    if (pages > 0 && pageDelayMs > 0) await sleep(pageDelayMs);
     const limit = Math.min(pageSize, maxWorks - works.length);
     const url = `${PROTOPEDIA_API_BASE}/prototype/list?limit=${limit}&offset=${offset}`;
 
@@ -328,18 +390,31 @@ export async function fetchAllWorks(opts: FetchAllOptions): Promise<FetchAllResu
     }
     pages += 1;
 
+    let added = 0;
     for (const row of rows) {
       const w = normalizeWork(row);
-      if (w) works.push(w);
-      else dropped += 1;
+      if (!w) {
+        dropped += 1;
+      } else if (seenIds.has(w.id)) {
+        duplicates += 1; // 同一IDは1件目だけ採用（offset無視対策）
+      } else {
+        seenIds.add(w.id);
+        works.push(w);
+        added += 1;
+      }
     }
 
     if (rows.length < limit) break; // 最終ページ
+    if (added === 0 && duplicates > 0) {
+      // 進捗ゼロ（同一ページが返り続けている）＝打ち切り。
+      // offset無視やAPI事故で無限ループ・レート制限を起こさない。
+      break;
+    }
     offset += limit;
   }
 
   const truncated = works.length >= maxWorks;
-  return { works, pages, dropped, truncated };
+  return { works, pages, dropped, duplicates, truncated };
 }
 
 // ---------------------------------------------------------------------------

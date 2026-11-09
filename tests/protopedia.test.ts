@@ -87,9 +87,31 @@ describe('normalizeWork', () => {
     expect(w!.licenseType).toBe('CC BY 4.0');
     expect(w!.mainUrl).toBe('https://example.com/img.png');
     expect(w!.systemDescription).toBe('Arduino + LED');
-    expect(w!.description).toBe('詳細説明');
+    // 詳細説明（freeComment）は仕様書§7により保存しない
+    expect('description' in w!).toBe(false);
     expect(w!.generation).toBe(0);
     expect(w!.sample).toBeUndefined();
+  });
+
+  it('実API形式: users/tags は |-区切り文字列（作者は name@handle のまま）、licenseType 1 → CC BY 4+', () => {
+    const w = normalizeWork({
+      id: 5,
+      prototypeNm: '実測形式の作品',
+      summary: '概要',
+      releaseFlg: 2,
+      users: 'ひさやん@hisayan|@erikosakashita',
+      tags: 'おもちゃ|クラッピーチャレンジ',
+      licenseType: 1,
+    });
+    expect(w).not.toBeNull();
+    expect(w!.authors).toEqual(['ひさやん@hisayan', '@erikosakashita']);
+    expect(w!.tags).toEqual(['おもちゃ', 'クラッピーチャレンジ']);
+    expect(w!.licenseType).toBe('CC BY 4+');
+  });
+
+  it('未知の licenseType 数値は捏造せず保存しない', () => {
+    expect(normalizeWork({ ...valid, licenseType: 7 })!.licenseType).toBeUndefined();
+    expect(normalizeWork({ ...valid, licenseType: 'CC BY 4.0' })!.licenseType).toBe('CC BY 4.0');
   });
 
   it('IDなし・作品名なし・非公開は null（壊れたレコードを黙って通さない）', () => {
@@ -113,10 +135,11 @@ describe('normalizeWork', () => {
     expect(normalizeWork({ ...valid, mainUrl: 'not a url' })!.mainUrl).toBeUndefined();
   });
 
-  it('summaryが空ならfreeCommentで代用し、long textは上限で切る', () => {
+  it('summaryが空ならfreeCommentの冒頭で代用し、概要は上限で切る', () => {
     const w = normalizeWork({ ...valid, summary: '', freeComment: 'あ'.repeat(5000) });
     expect(w!.summary).toBe('あ'.repeat(600) + '…');
-    expect([...w!.description!]).toHaveLength(2001);
+    // freeComment 全文は保存しない（仕様書§7）
+    expect('description' in w!).toBe(false);
   });
 });
 
@@ -129,7 +152,12 @@ describe('fetchAllWorks', () => {
       const offset = Number(u.searchParams.get('offset'));
       return offset === 0 ? { status: 200, body: page([1, 2]) } : { status: 200, body: page([3]) };
     });
-    const result = await fetchAllWorks({ token: 'test-token', pageSize: 2, fetchImpl: impl });
+    const result = await fetchAllWorks({
+      token: 'test-token',
+      pageSize: 2,
+      pageDelayMs: 0,
+      fetchImpl: impl,
+    });
     expect(result.works.map((w) => w.id)).toEqual(['protopedia:1', 'protopedia:2', 'protopedia:3']);
     expect(result.pages).toBe(2);
     expect(calls[0]).toContain('limit=2&offset=0');
@@ -163,6 +191,35 @@ describe('fetchAllWorks', () => {
     );
   });
 
+  it('件数外オフセット（count:0 で results キー無し）は正常終了する', async () => {
+    // 実測形状: カタログを超える offset では HTTP 200 + count:0 + results無し。
+    // これは最終ページの後ろ = 空ページなので、例外にせずここで打ち切る。
+    const { impl } = mockFetch((url) => {
+      const u = new URL(url);
+      const offset = Number(u.searchParams.get('offset'));
+      return offset === 0
+        ? { status: 200, body: page([1, 2]) }
+        : { status: 200, body: { metadata: { status: 200 }, count: 0, links: {} } };
+    });
+    const result = await fetchAllWorks({ token: 't', pageSize: 2, pageDelayMs: 0, fetchImpl: impl });
+    expect(result.works.map((w) => w.id)).toEqual(['protopedia:1', 'protopedia:2']);
+    expect(result.pages).toBe(2);
+    expect(result.truncated).toBe(false);
+  });
+
+  it('同一IDの重複レコードは1件目だけ採用する（offset無視対策）', async () => {
+    const { impl } = mockFetch((url) => {
+      const u = new URL(url);
+      const offset = Number(u.searchParams.get('offset'));
+      // 2ページ目が同じ内容を返してきた想定
+      return { status: 200, body: page(offset === 0 ? [1, 2] : [1, 2]) };
+    });
+    const result = await fetchAllWorks({ token: 't', pageSize: 2, pageDelayMs: 0, fetchImpl: impl });
+    expect(result.works.map((w) => w.id)).toEqual(['protopedia:1', 'protopedia:2']);
+    expect(result.duplicates).toBe(2);
+    expect(result.pages).toBe(2); // 進捗ゼロで打ち切る（無限ループしない）
+  });
+
   it('不正レコードは落として数え、maxWorksで打ち切る', async () => {
     const { impl } = mockFetch((url) => {
       const u = new URL(url);
@@ -170,7 +227,13 @@ describe('fetchAllWorks', () => {
       const ids = offset === 0 ? [1, -5, 3] : [4, 5];
       return { status: 200, body: page(ids) };
     });
-    const result = await fetchAllWorks({ token: 't', pageSize: 3, maxWorks: 4, fetchImpl: impl });
+    const result = await fetchAllWorks({
+      token: 't',
+      pageSize: 3,
+      maxWorks: 4,
+      pageDelayMs: 0,
+      fetchImpl: impl,
+    });
     expect(result.works.length).toBeLessThanOrEqual(4);
     expect(result.dropped).toBeGreaterThanOrEqual(1);
     expect(result.truncated).toBe(true);
@@ -178,6 +241,25 @@ describe('fetchAllWorks', () => {
 
   it('トークン未設定は即例外', async () => {
     await expect(fetchAllWorks({ token: '' })).rejects.toThrow('トークン');
+  });
+
+  it('maxPages で取得ページ数を上限つきにできる（試作取得の暴走防止）', async () => {
+    const { impl, calls } = mockFetch(() => ({ status: 200, body: page([1, 2]) }));
+    const result = await fetchAllWorks({
+      token: 't',
+      pageSize: 2,
+      maxPages: 1,
+      pageDelayMs: 0,
+      fetchImpl: impl,
+    });
+    expect(result.pages).toBe(1);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('offsetStart で取得開始位置をずらせる', async () => {
+    const { impl, calls } = mockFetch(() => ({ status: 200, body: page([7]) }));
+    await fetchAllWorks({ token: 't', pageSize: 1, offsetStart: 500, pageDelayMs: 0, fetchImpl: impl });
+    expect(calls[0]).toContain('offset=500');
   });
 });
 

@@ -1,11 +1,14 @@
-# ProtoPedia作品の定期同期（docs/protopediaapi.md §6.1 / §7）。
+# ProtoPedia作品の全件同期（docs/protopediaapi.md §6.1 / §7）。
 # PROTOPEDIA_API_V2_TOKEN（Secrets）がない場合はスキップし、既存JSONを維持する。
 # トークン取得: https://protopedia.net/settings/application
+#
+# 注意（追加開発指示 §5）: 試作段階では「全件収集を開始しない」。
+# そのため定期実行は外し、手動 dispatch のみにしている。
+# 毎時の候補は data/sample-prototypes.json（少数取得）から rotate-candidates が選ぶ。
+# 全件同期を有効にするときだけ schedule を戻すこと。
 name: Sync ProtoPedia works
 
 on:
-  schedule:
-    - cron: '20 3 * * *' # 毎日1回（正時の厳密な実行は要求しない）
   workflow_dispatch:
 
 # data/prototypes.json のコミットに必要な最小権限のみ。

@@ -75,7 +75,7 @@ async function main(): Promise<void> {
   summaryLine(
     'ProtoPedia API v2',
     result.works,
-    `（${result.pages}ページ / 正規化落ち ${result.dropped}件 / ${elapsedS}秒${result.truncated ? ' / 上限で打ち切り' : ''}）`,
+    `（${result.pages}ページ / 正規化落ち ${result.dropped}件 / 重複 ${result.duplicates}件 / ${elapsedS}秒${result.truncated ? ' / 上限で打ち切り' : ''}）`,
   );
 
   if (dryRun) {

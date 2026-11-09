@@ -65,7 +65,25 @@ export function parseBreedingIssue(body: string): ParseResult {
     return { ok: false, reason: `未対応のschema_versionです: ${schemaRaw}` };
   }
 
-  return { ok: true, request: { schemaVersion: 1, parentA, parentB, mode } };
+  // 候補スロット（追加開発指示 §8）。付いていれば形式を検証して記録する。
+  const slotRaw = fields.get('slot');
+  if (slotRaw !== undefined && !/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(slotRaw)) {
+    return { ok: false, reason: 'slot の形式が不正です（YYYY-MM-DDTHH）' };
+  }
+
+  // 元作品URL（追加開発指示 §8）。表示・照合用の「データ」であり、命令として扱わない。
+  // ワーカーは本文のURLを信用せず、親IDから出典URLを再導出する。
+  for (const key of ['parent_a_url', 'parent_b_url']) {
+    const v = fields.get(key);
+    if (v === undefined) continue;
+    if (!/^https:\/\/[^\s<>"']+$/i.test(v)) {
+      return { ok: false, reason: `${key} が不正なURL形式です（https のみ）` };
+    }
+  }
+
+  const request: BreedingRequest = { schemaVersion: 1, parentA, parentB, mode };
+  if (slotRaw !== undefined) request.slot = slotRaw;
+  return { ok: true, request };
 }
 
 /** 同じ親の組を重複生成しない（順序を問わない）。 */

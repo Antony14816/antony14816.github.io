@@ -22,12 +22,12 @@ export interface ProtopediaWork {
   /** 作者名（クレジット表示用） */
   authors?: string[];
   tags?: string[];
-  /** ライセンス表記（利用条件の確認に使う。実APIでの提供有無は未検証） */
+  /** ライセンス表記（実APIの数値enumをラベル化。不明な値は保存しない） */
   licenseType?: string;
-  /** 技術構成（systemDescription）。生成AIへの参考資料として使う。 */
+  /** 技術構成（systemDescription）。生成AIへの参考資料として使う（長さ上限つき）。 */
   systemDescription?: string;
-  /** 詳細説明（freeComment）。長さ上限つき。 */
-  description?: string;
+  // 注: 詳細説明（freeComment）は保存しない（仕様書§7「詳細説明を無制限に保存せず」）。
+  // 交配時に入力が必要な場合はワーカーが prototypeId でAPIから直接取得する（§6.2）。
 }
 
 /**
@@ -79,4 +79,6 @@ export interface BreedingRequest {
   parentA: ParentId;
   parentB: ParentId;
   mode: BreedingMode;
+  /** 申請時の候補スロット（任意）。形式: UTC "YYYY-MM-DDTHH"（追加開発指示 §8） */
+  slot?: string;
 }

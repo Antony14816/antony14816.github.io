@@ -12,12 +12,15 @@ ProtoPediaに公開された実在の作品を2つ「親」として選び、生
 | --- | --- |
 | 公開UI | GitHub Pages（Vite + TypeScript の静的サイト） |
 | 投稿 | GitHub Issues（サイトにログイン機能・書き込みトークンなし） |
+| 交配候補 | 毎時ローテ → `data/current-candidates.json`（**ブラウザはProtoPedia APIを呼ばない**） |
+| 作品データ | ProtoPedia API v2 → 少数取得（`data/sample-prototypes.json` ほか）→ 候補プール |
 | 交配ワーカー | GitHub Actions（毎時実行 + 手動 `workflow_dispatch`） |
-| 作品データ | ProtoPedia API v2 → Actionsが同期 → `data/prototypes.json`（**ブラウザはAPIを呼ばない**） |
 | 永続データ | リポジトリ内の `data/offspring.json` |
 | AI | Actions（サーバー側）から呼ぶ交換可能なプロバイダー |
 
 **1時間に1件だけAI交配が走ります（全ユーザー共有の枠）。** 閲覧・選択・家系図表示にAIは使いません。
+
+**候補は毎時6件が全ユーザー共通**です。「本日の発明研究所」に並ぶ候補はスロット（UTC `YYYY-MM-DDTHH`）ごとに決定的に選ばれ、**ページを再読み込みしても変わりません**。自由検索はなく、候補から2作品（AとB）を選んで申請します。
 
 ## セットアップ（ローカル開発）
 
@@ -27,9 +30,10 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
-- APIキーなしでもフロントは起動・ビルドできます（`npm test`, `npm run build`）。
-- ProtoPedia API未接続の現時点では、`[SAMPLE]` 付きの**開発用サンプル作品**のみ表示されます。本番の作品と混同しないでください。
-- 開発モードで本番の子作品が0件のときだけ、サンプルの子作品（家系図2世代の確認用）を表示します。
+- APIトークンなしでもフロントは起動・ビルドできます（`npm test`, `npm run build`）。
+- 候補6件は `data/current-candidates.json` の静的importだけ（ブラウザからAPIを呼ばない）。
+- 候補データが未同期のときは `[SAMPLE]` 付きの**開発用サンプル**が表示され、右上バッジも「開発用サンプル」になります。本番と混同しないでください。
+- 本番の子作品が0件のときだけ、サンプルの子作品（家系図2世代の確認用）を「最近誕生した発明」と家系図に表示します（注意書きを分けて案内）。
 
 ### 環境変数
 
@@ -51,25 +55,30 @@ npm run dev            # http://localhost:5173
 4. **Actions権限**: Settings → Actions → General → Workflow permissions を設定。JSONコミットには `contents: write`、Issue対応には `issues: write` を該当ジョブのみに付与。
 5. 交配申請はサイトの「交配を申請」ボタン → Issue作成画面が開く → **ユーザー自身が送信**。
 
-## ProtoPedia作品の同期（API v2）
+## ProtoPedia作品の取得と候補ローテ（API v2）
 
-仕様は `docs/protopediaapi.md`（調査資料）を参照。実装は `lib/protopedia.ts` + `scripts/sync-protopedia.ts` + `.github/workflows/sync-prototypes.yml`。
+仕様は `docs/protopediaapi.md`（調査資料。**実接続で一部確認済み**、下「検証済みと未検証」参照）。実装は `lib/protopedia.ts` + `scripts/fetch-sample-prototypes.mjs` + `scripts/rotate-candidates.ts`。
 
 ```text
-ProtoPedia API v2 ──(Bearer)──> Actions（毎日 03:20 UTC + 手動 dispatch）
-                                   │ 取得 → HTML除去・型検証・URL検証
+ProtoPedia API v2 ──(Bearer)──> npm run fetch:sample（少数・手動 / syncはdispatchのみ）
+                                   │ 取得 → HTML除去・型検証・URL検証・ライセンス確認
                                    ▼
-                          data/prototypes.json ──> GitHub Pages
-                          （失敗時は既存JSONを一切更新しない）
+                          data/sample-prototypes.json（候補プール）
+                                   │ npm run rotate:candidates（毎時・API/トークン不要）
+                                   ▼
+                          data/current-candidates.json ──> GitHub Pages（静的import）
 ```
 
-- **ローカル実行**: `PROTOPEDIA_API_V2_TOKEN=<token> npm run sync:protopedia`
-  - `-- --dry-run`: 取得・検証のみ（書き込まない。トークン要）
-  - `-- --mock`: サンプルデータでパイプライン確認（書き込まない。トークン不要）
-- **失敗時の挙動**: 取得失敗・0件・不正レスポンスでは `prototypes.json` を置き換えない（直前の正常データを維持）。
-- **トークンの扱い**: Secrets/ローカルenvのみ。URL・ログ・JSON・コミット・フロントバンドルに入れない。ブラウザは同期済みJSONだけを読む。
-- 同期後はサイトの「作品一覧: ProtoPedia N件（最終同期: …）」表示に切り替わり、サンプル作品（`[SAMPLE]`）は自動的に表示されなくなる。
-- 作品検索（名前・作者・タグ・概要）と詳細パネルの作者・タグ・ライセンス・作品画像はこのJSONから表示する。
+- **試作段階では全件収集を開始しない**: `npm run fetch:sample` は既定12件（`--count=` 上限50 / `--offset=`）。
+  全件同期は `npm run sync:protopedia`。`sync-prototypes.yml` は**手動 dispatch のみ**（有効化するときだけ `schedule` を戻す）。
+- **候補ローテ**: `npm run rotate:candidates` は保存済みプールからスロット（UTC `YYYY-MM-DDTHH`）に**決定的に**6件を選出。
+  同じスロットなら常に同じ6件（Actionsの再実行・ローカル実行でも不変）。APIもトークンも使わない。
+  `-- --slot=2026-11-09T14` で任意の枠を検証、`-- --dry-run` で書き込まず確認。
+- **毎時更新**: `.github/workflows/rotate-candidates.yml`（cron + dispatch）がスロットを進めて `data/current-candidates.json` をコミット。
+  画面上の「次回の候補更新予定」はこの**実行結果（JSONの値）**ベースで、Actionsの遅延時は注意書きが出ます。
+- **失敗時の挙動**: 取得失敗・0件・不正レスポンスでは既存JSONを置き換えない（0件保存は拒否）。
+- **トークンの扱い**: `.env` / Secretsのみ。スクリプトがreadFileSyncで読む（シェルにexportしない）。ログ・JSON・コミット・フロントバンドルに入れない。
+- 作者（`表示名@handle` のまま保存 = クレジット用）・タグ・ライセンス・作品画像はこのJSONから表示。
 
 ## 交配申請フォーマット
 
@@ -78,10 +87,14 @@ Title: [Breed] protopedia:1234 x protopedia:5678   ← 表示用（信用しな�
 
 parent_a: protopedia:1234                           ← 正規の入力元は本文のみ
 parent_b: protopedia:5678
+parent_a_url: https://protopedia.net/prototype/1234 ← 表示・照合用の「データ」（httpsのみ）
+parent_b_url: https://protopedia.net/prototype/5678
 mode: fusion
+slot: 2026-11-09T12                                 ← 申請時の候補スロット（UTC）
 ```
 
 - 親Aと親Bは別のID、許可されたID形式（`protopedia:<数字>` / `mashup-<数字>`）のみ。
+- `slot` / `*_url` は付いていれば形式を検証して記録。URLは命令として扱わず、ワーカーは親IDから出典URLを再導出する。
 - 不正な入力はAIを呼ばずに理由をコメントします。
 
 ## デザイン（16bit交配研究所 / DESIGN.md準拠）
@@ -90,7 +103,11 @@ mode: fusion
 
 - **ダーク / ライト切り替え**: ヘッダー右上のボタンで切り替え、`localStorage['mashup-theme']` に保存。既定はOS設定。`index.html` の初期化スクリプトがCSS読込前に `data-theme` を設定し、テーマフラッシュを防ぐ。トークンは `:root` の `--lab-*`（固定パレット）とロールトークン（`--bg` / `--window` / `--line` / `--text` など）に集中管理。
 - **フォント**: 見出し・ボタン・ラベルは [DotGothic16](https://fonts.google.com/specimen/DotGothic16)、**本文は [Noto Sans JP](https://fonts.google.com/specimen/Noto+Sans+JP)** で可読性優先（**Google Fonts CDN への外部接続あり**。届かない環境ではゴシック/等幅にフォールバック）。
-- **ウィンドウ**: 太い外枠3px + 内側の細い線（inset）+ 右下ハードシャドウのRPG風。角丸・ガラス調・ネオンは不使用。
+- **ウィンドウ**: 太い外枠3px + 内側の細い線（inset）+ 右下ハードシャドウのRPG風。ガラス調・ネオンは不使用。
+- **候補パネル「本日の発明研究所」**: 画面完成イメージ準拠の角丸パネル + 3列画像カード（900pxで2列 / 560pxで1列）。
+  画像タイルは下地 `--tile`（白系・両テーマ共通）で `object-fit: contain`・`loading=lazy`・読込失敗時は「画像なし」プレースホルダ（枠は維持）。
+  見出しは DotGothic16 + ラテン小見出し、枠・色は研究所トークンのまま — **一般的なSaaSカードUIにしない**。
+  選択状態は「タイル枠の色 + バッジ文字（親A選択中）+ 押下ボタン」の三重化で色だけに依存しない。
 - **家系図の配色は dataviz 手順で検証済み（両テーマ・ノード面でPASS）**:
   | テーマ | 面 | 元作品（実線） | 子作品（破線） |
   |---|---|---|---|
@@ -109,25 +126,33 @@ mode: fusion
   - AGENTS.mdのIssue例は `mashup:<生成ID>`（コロン）だが、データモデル例は `mashup-000001`（ハイフン）。**誤導入を避けるためデータモデル例のハイフン形式に統一**した。
 - 先祖と子孫の組み合わせ（近親交配）は拒否する。共通の子を持つだけのダイヤモンド形状は許可。
 
-## ステータス / 未検証事項
+## ステータス / 検証済みと未検証
 
-- [ ] `deploy.yml` / `sync-prototypes.yml` の実動作 — **未検証**（ローカルではYAML構文・スクリプト単体・`GITHUB_REPOSITORY`注入・`npm ci`の整合のみ確認。初回push後のActions実行結果を確認すること）。
-- [ ] ProtoPedia API v2 の**認証済み実接続** — **未検証**（仕様書 `docs/protopediaapi.md` に基づく実装のみ）。実トークンで要確認:
-  - `results` 配列の実構造とフィールド型（`fetchPrototypeList`の抽出候補は `results`/`items`/`data`/`list`）
-  - `releaseFlg` の値の意味（欠損=公開扱いの暫定実装）
-  - 作品ページURLの実パス（`https://protopedia.net/prototype/<id>` は推定、APIにURLフィールドがあれば優先）
-  - `users` / `tags` の要素構造（`userNm`/`tagNm` 仮定）、`licenseType` の提供有無
-  - レート制限・1レスポンスの件数上限・説明文の文字数上限
-- [ ] 生成AIプロバイダーの選定（料金・無料枠・構造化出力）— **未検証**。`AI_API_KEY` 未設定時はドライラン。
+**実接続で確認済み（2026-11・実トークンでの取得）**:
+- `/prototype/list` のレスポンス形状は `{metadata, count, links, results}`。**`count` はページ内件数**（総数ではない）。
+- カタログ件数外の offset は HTTP 200 + `count:0` で `results` キー自体が無い（= 空ページとして正常終了）。
+- `users` / `tags` は `|`-区切りの**文字列**。作者は `表示名@handle` 形式（例 `ひさやん@hisayan`。そのまま保存 = クレジット用）。
+- `licenseType: 1` → 作品ページ表示「CC BY 4+」（id=1 のページと照合済み）。取得時はライセンスのある作品だけ保存。
+- 作品ページURLは `https://protopedia.net/prototype/<id>`。カタログ総数は 5,100件超（正確な総数は未測定）。
+- `data/sample-prototypes.json` 12件取得 → `data/current-candidates.json` 候補6件生成 → 両方とも `npm run validate-data` で検証済み。
+
+**未検証**:
+- [ ] `deploy.yml` / `sync-prototypes.yml` / `rotate-candidates.yml` の実動作 — push後のActions実行結果で確認（ローカルではYAML構文・スクリプト単体・決定的選出テストのみ確認）。
+- [ ] `releaseFlg` のenum値の意味（観測値は常に 2。欠損=公開扱いの暫定実装）。
+- [ ] ProtoPedia APIのレート制限・1レスポンスの件数上限（ページ間隔100msで暫定対応）。
+- [ ] 生成AIプロバイダーの選定（料金・無料枠・構造化出力）。`AI_API_KEY` 未設定時はドライラン。
 - [ ] `data/offspring.json` へのコミットとブランチ保護の兼ね合い — Actions実装時に確認、必要ならPR方式へ。
 
 ## 開発コマンド
 
 ```bash
-npm run dev          # 開発サーバー
-npm test             # バリデーション・世代計算・循環防止などのテスト
-npm run build        # 型チェック + 本番ビルド
-npm run validate-data  # data/offspring.json の検証
+npm run dev             # 開発サーバー
+npm test                # パーサー・世代計算・候補選出・フロントのスモークテスト
+npm run build           # 型チェック + 本番ビルド
+npm run validate-data   # offspring / prototypes / sample-prototypes / current-candidates の検証
+npm run fetch:sample    # ProtoPediaから少数だけ取得 → data/sample-prototypes.json（トークン要）
+npm run rotate:candidates # 候補6件をスロットから決定的に選出 → data/current-candidates.json（トークン不要）
+npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイルのスクリーンショット（tmp/）
 ```
 
 ## ディレクトリ
@@ -135,12 +160,14 @@ npm run validate-data  # data/offspring.json の検証
 ```text
 .
 ├── AGENTS.md            # プロジェクト規約（最初に読む）
+├── DESIGN.md            # デザイン規約（16bit交配研究所）
 ├── README.md
 ├── index.html
 ├── src/                 # GitHub Pages用UI（vanilla TS）
-├── lib/                 # 型・Issueパーサー・世代計算・設定（フロント/ワーカー共有）
-├── data/                # offspring.json（本番データ）+ *sample*.json（開発用）
-├── scripts/             # ワーカー用スクリプト（validate-data.ts 実装済み、process-breeding.ts 実装予定）
+├── lib/                 # 型・Issueパーサー・世代計算・候補選出・ProtoPedia/設定（フロント/ワーカー共有）
+├── data/                # offspring.json / current-candidates.json / *sample*.json
+├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot
 ├── tests/
-└── .github/workflows/   # deploy.yml（実装済み） / breed.yml（実装予定）
+└── .github/workflows/   # deploy.yml / sync-prototypes.yml（dispatchのみ） /
+                         # rotate-candidates.yml（毎時） / breed.yml（実装予定）
 ```

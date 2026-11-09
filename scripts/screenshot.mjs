@@ -26,6 +26,27 @@ async function newThemedPage(viewport, theme) {
 async function goto(page) {
   await page.goto(base, { waitUntil: 'load', timeout: 30000 });
   await page.waitForTimeout(800); // Webフォント読み込み待ち
+  // lazy画像を確実に読み込ませる（初回キャッシュ無しで撮ると1枚欠けるため）
+  await page.evaluate(async () => {
+    const imgs = Array.from(document.images);
+    imgs.forEach((i) => {
+      i.loading = 'eager';
+    });
+    window.scrollTo(0, document.body.scrollHeight);
+    await new Promise((r) => setTimeout(r, 300));
+    window.scrollTo(0, 0);
+    await Promise.all(
+      imgs.map((i) =>
+        i.complete
+          ? null
+          : new Promise((res) => {
+              i.addEventListener('load', res, { once: true });
+              i.addEventListener('error', res, { once: true });
+            }),
+      ),
+    );
+  });
+  await page.waitForTimeout(200);
 }
 
 // --- デスクトップ: ライト ----------------------------------------------------

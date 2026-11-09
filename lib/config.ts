@@ -22,21 +22,31 @@ export function repoConfigFromEnv(
   return { owner, repo };
 }
 
+/** 交配申請リンクに含める任意フィールド（追加開発指示 §8: 元作品URL・候補スロット）。 */
+export interface IssueLinkOptions {
+  mode?: string;
+  /** 申請時の候補スロット（UTC "YYYY-MM-DDTHH"） */
+  slot?: string;
+  /** 親Aの元作品URL（ProtoPediaの作品ページ） */
+  parentAUrl?: string;
+  /** 親Bの元作品URL */
+  parentBUrl?: string;
+}
+
 export function newIssueUrl(
   cfg: RepoConfig,
   parentA: string,
   parentB: string,
-  mode = 'fusion',
+  opts: IssueLinkOptions = {},
 ): string {
   const title = `[Breed] ${parentA} x ${parentB}`;
   // AGENTS.md: Issueの本文のみを正規の入力元とし、タイトルは表示用。
-  const body = [
-    `parent_a: ${parentA}`,
-    `parent_b: ${parentB}`,
-    `mode: ${mode}`,
-    '',
-    '<!-- mashup-ours: generated link -->',
-  ].join('\n');
-  const params = new URLSearchParams({ title, body });
+  const lines = [`parent_a: ${parentA}`, `parent_b: ${parentB}`];
+  if (opts.parentAUrl) lines.push(`parent_a_url: ${opts.parentAUrl}`);
+  if (opts.parentBUrl) lines.push(`parent_b_url: ${opts.parentBUrl}`);
+  lines.push(`mode: ${opts.mode ?? 'fusion'}`);
+  if (opts.slot) lines.push(`slot: ${opts.slot}`);
+  lines.push('', '<!-- mashup-ours: generated link -->');
+  const params = new URLSearchParams({ title, body: lines.join('\n') });
   return `https://github.com/${cfg.owner}/${cfg.repo}/issues/new?${params.toString()}`;
 }
