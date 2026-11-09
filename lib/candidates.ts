@@ -1,23 +1,24 @@
 /**
- * 15分ごとの配合候補（6件）の決定的選出。（追加開発指示 §3 / §7 / issue #10）
+ * 配合候補の決定的選出。（追加開発指示 §3 / §7 / issue #10、間隔の設定化 issue #15）
  *
  * 要件:
- * - 候補は1枠（15分）につき最大6作品・重複表示なし。
- * - 15分の間は全ユーザーに同じ候補（= 同じスロット文字列なら常に同じ選出）。
+ * - 候補は1枠につき最大 maxCandidates（既定6）作品・重複表示なし。
+ * - 1枠の間は全ユーザーに同じ候補（= 同じスロット文字列なら常に同じ選出）。
  * - ページ再読み込みで候補を変化させない（UIは data/current-candidates.json を読むだけ）。
  * - 候補の生成時刻（generatedAt）と対象時間帯（slot）をJSONに記録する。
  * - Actionsの実行遅延に備え、表示はJSONの値（実行結果）ベースにする。
  *
- * ※ 候補スロット（15分刻み "YYYY-MM-DDTHHMM"）と、
- *   配合スロット（1時間1件・lib/generation.ts slotKey "YYYY-MM-DDTHH"）は別物。
+ * ※ 候補スロット（"YYYY-MM-DDTHHMM"・間隔は config/schedule.json の
+ *   candidateRotationMinutes、既定15分刻み）と、
+ *   配合スロット（lib/generation.ts slotKey "YYYY-MM-DDTHH"）は別物。
  *
  * このモジュールは純関数のみ（Node依存なし）。フロント・ワーカー・テストで共有する。
  */
 import type { ProtopediaWork } from './types.ts';
 
-/** 候補の更新間隔（分）。cron は `4/15 * * * *`（正時回避のため境界+4分）。 */
+/** 候補スロットの既定の間隔（分）。実際の間隔は config/schedule.json（issue #15）。 */
 export const CANDIDATE_SLOT_MINUTES = 15;
-/** 1枠（15分）の候補数（最大）。プールが6未満ならその件数まで。 */
+/** 1枠の候補数（最大・既定）。実際の上限は config/schedule.json の maxCandidates（issue #15）。 */
 export const CANDIDATES_PER_SLOT = 6;
 
 export interface CandidatesFile {
@@ -93,42 +94,60 @@ export function selectCandidates(
   return uniq.slice(0, Math.min(count, uniq.length));
 }
 
-/**
- * UTC基準の候補スロットキー "YYYY-MM-DDTHHMM"（15分境界に切り下げ）。
- * Actionsの再実行・手動実行でも同じ枠内で常に同じスロットになる（決定的な選出の前提）。
- */
-export function candidateSlotKey(date: Date = new Date()): string {
-  const y = date.getUTCFullYear();
-  const mo = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(date.getUTCDate()).padStart(2, '0');
-  const h = String(date.getUTCHours()).padStart(2, '0');
-  const mi = String(Math.floor(date.getUTCMinutes() / CANDIDATE_SLOT_MINUTES) * CANDIDATE_SLOT_MINUTES).padStart(
-    2,
-    '0',
-  );
-  return `${y}-${mo}-${d}T${h}${mi}`;
+/** 間隔（分）の形式検証（不正は例外）。config/schedule.json の検証とは独立に呼べる。 */
+function assertSlotMinutes(slotMinutes: number): void {
+  if (!Number.isInteger(slotMinutes) || slotMinutes < 1) {
+    throw new Error(`slotMinutes は正の整数である必要があります: ${slotMinutes}`);
+  }
 }
 
-/** slot "YYYY-MM-DDTHHMM" の次の15分境界。形式不正は例外。 */
-export function nextSlotKey(slot: string): string {
+/**
+ * UTC基準の候補スロットキー "YYYY-MM-DDTHHMM"（slotMinutes 間隔の境界へ切り下げ）。
+ * エポックミリ秒ベースなので 60 で割り切れない間隔（7分・10分など）でも日跨ぎなく正しく切れる。
+ * Actionsの再実行・手動実行でも同じ枠内で常に同じスロットになる（決定的な選出の前提）。
+ */
+export function candidateSlotKey(
+  date: Date = new Date(),
+  slotMinutes: number = CANDIDATE_SLOT_MINUTES,
+): string {
+  assertSlotMinutes(slotMinutes);
+  const stepMs = slotMinutes * 60_000;
+  const d = new Date(Math.floor(date.getTime() / stepMs) * stepMs);
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const mi = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${y}-${mo}-${day}T${h}${mi}`;
+}
+
+/** slot "YYYY-MM-DDTHHMM" の次の slotMinutes 分後の境界。形式不正・間隔不正は例外。 */
+export function nextSlotKey(slot: string, slotMinutes: number = CANDIDATE_SLOT_MINUTES): string {
+  assertSlotMinutes(slotMinutes);
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})$/.exec(slot);
   if (!m) throw new Error(`slot 形式が不正です（YYYY-MM-DDTHHMM）: ${slot}`);
   const d = new Date(
-    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]) + CANDIDATE_SLOT_MINUTES),
+    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]) + slotMinutes),
   );
   const hh = String(d.getUTCHours()).padStart(2, '0');
   const mi = String(d.getUTCMinutes()).padStart(2, '0');
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}T${hh}${mi}`;
 }
 
-/** 候補JSONを組み立てる。プール0件は例外（= 既存ファイルを更新しない）。 */
+/**
+ * 候補JSONを組み立てる。プール0件は例外（= 既存ファイルを更新しない）。
+ * opts: 間隔（分）と候補件数の上限（config/schedule.json から渡す / issue #15）。
+ */
 export function buildCandidatesFile(
   pool: readonly ProtopediaWork[],
   slot: string,
   source: string,
   now: Date = new Date(),
+  opts: { slotMinutes?: number; maxCandidates?: number } = {},
 ): CandidatesFile {
-  const candidates = selectCandidates(pool, slot);
+  const slotMinutes = opts.slotMinutes ?? CANDIDATE_SLOT_MINUTES;
+  const maxCandidates = opts.maxCandidates ?? CANDIDATES_PER_SLOT;
+  const candidates = selectCandidates(pool, slot, maxCandidates);
   if (candidates.length === 0) {
     throw new Error('選出できる作品がありません（プールが空のため候補を更新しません）');
   }
@@ -136,7 +155,7 @@ export function buildCandidatesFile(
     schemaVersion: 1,
     slot,
     generatedAt: now.toISOString(),
-    nextSlot: nextSlotKey(slot),
+    nextSlot: nextSlotKey(slot, slotMinutes),
     source,
     candidates,
   };
@@ -145,8 +164,13 @@ export function buildCandidatesFile(
 /**
  * data/current-candidates.json の形を検証する（フロントの読み込みガード）。
  * 想定外の形なら false を返し、呼び出し側は開発用サンプルに落とす。
+ * maxCandidates: config の値を渡す（issue #15）。引き下げた直後に既存ファイルを
+ * 壊さないよう、呼び出し側は max(設定値, 既定6) を渡すのが望ましい。
  */
-export function isCandidatesFile(x: unknown): x is CandidatesFile {
+export function isCandidatesFile(
+  x: unknown,
+  maxCandidates: number = CANDIDATES_PER_SLOT,
+): x is CandidatesFile {
   if (typeof x !== 'object' || x === null || Array.isArray(x)) return false;
   const f = x as Record<string, unknown>;
   if (f.schemaVersion !== 1) return false;
@@ -155,7 +179,7 @@ export function isCandidatesFile(x: unknown): x is CandidatesFile {
   if (typeof f.generatedAt !== 'string' || Number.isNaN(Date.parse(f.generatedAt))) return false;
   if (typeof f.source !== 'string' || f.source.length === 0) return false;
   if (!Array.isArray(f.candidates)) return false;
-  if (f.candidates.length === 0 || f.candidates.length > CANDIDATES_PER_SLOT) return false;
+  if (f.candidates.length === 0 || f.candidates.length > maxCandidates) return false;
 
   const ids = new Set<string>();
   for (const c of f.candidates) {

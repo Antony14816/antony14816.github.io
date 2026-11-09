@@ -12,6 +12,11 @@
  */
 import type { Offspring } from '../lib/types.ts';
 import type { CharacterState } from './character.ts';
+import { intervalLabel, resolveSchedule } from '../lib/schedule.ts';
+import rawSchedule from '../config/schedule.json';
+
+// 頻度設定（config/schedule.json / issue #15）: 「1時間」固定ではなく設定値から表示する。
+const { config: scheduleCfg } = resolveSchedule(rawSchedule);
 
 /** GitHub の Issue 最小情報（API の items[] から取り出す項目のみ） */
 export interface SeenIssue {
@@ -184,8 +189,7 @@ export function observeView(phase: ObservePhase): ObserveViews {
           state: 'idle',
           message: '配合待ち: 次の実験が始まるまで、もう少しじゃ！',
         },
-        greeting:
-          '配合待ちの発明があります。次の配合タイム（1時間に最大1件・全員で共有）までお待ちください。',
+        greeting: `配合待ちの発明があります。次の配合タイム（${intervalLabel(scheduleCfg.breedingIntervalMinutes)}に最大1件・全員で共有）までお待ちください。`,
         bothState: 'idle',
       };
     case 'nothing':

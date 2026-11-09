@@ -3,9 +3,10 @@
  * 使い方: npm run validate-data
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { isCandidatesFile, nextSlotKey } from '../lib/candidates.ts';
+import { CANDIDATES_PER_SLOT, isCandidatesFile } from '../lib/candidates.ts';
 import { computeGeneration, isAncestorDescendantPair, nextOffspringId } from '../lib/generation.ts';
 import { samePair } from '../lib/issue.ts';
+import { isBreedingState, parseScheduleConfig } from '../lib/schedule.ts';
 import type { Offspring, Workset } from '../lib/types.ts';
 
 const FILE = new URL('../data/offspring.json', import.meta.url);
@@ -15,6 +16,22 @@ function fail(msg: string): never {
   console.error(`❌ ${msg}`);
   process.exit(1);
 }
+
+// --- config/schedule.json（頻度設定 / issue #15） -----------------------------
+// 最初に検証する（設定が不正な場合は処理を停止してエラーを通知する）。
+const SCHEDULE_FILE = new URL('../config/schedule.json', import.meta.url);
+let schedRaw: unknown;
+try {
+  schedRaw = JSON.parse(readFileSync(SCHEDULE_FILE, 'utf8'));
+} catch (e) {
+  fail(`config/schedule.json を読めません: ${String(e)}`);
+}
+const sched = parseScheduleConfig(schedRaw);
+if (!sched.ok) fail(`config/schedule.json が不正です: ${sched.reason}`);
+const scheduleCfg = sched.config;
+console.log(
+  `✅ config/schedule.json OK（候補更新 ${scheduleCfg.candidateRotationMinutes}分 / 配合 ${scheduleCfg.breedingIntervalMinutes}分 / 最大${scheduleCfg.maxCandidates}件）`,
+);
 
 let data: unknown;
 try {
@@ -182,14 +199,23 @@ try {
 } catch {
   fail('data/current-candidates.json がありません（npm run rotate:candidates を実行してください）');
 }
-if (!isCandidatesFile(candRaw)) {
+// 読み取りガードの上限は max(設定値, 既定6)（設定を引き下げた直後の既存ファイルを壊さない / issue #15）
+const candFileMax = Math.max(scheduleCfg.maxCandidates, CANDIDATES_PER_SLOT);
+if (!isCandidatesFile(candRaw, candFileMax)) {
   fail('current-candidates.json の形式が不正です（npm run rotate:candidates で作り直してください）');
 }
 const cand = candRaw;
 
-// slot/nextSlotの整合（Actionsの実行結果として記録された値同士が一致しているか）
-if (cand.nextSlot !== nextSlotKey(cand.slot)) {
-  fail(`current-candidates.json: nextSlot（${cand.nextSlot}）が slot（${cand.slot}）の次枠と一致しません`);
+// slot/nextSlotの整合。比較は config の値に依存しない（設定変更の直後に
+// 設定変更前の生成結果を壊さないため、「次枠が1分後〜1週間後」であることだけを見る / issue #15）
+const slotToMs = (s: string): number => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})$/.exec(s);
+  if (!m) return Number.NaN;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+};
+const slotGapMinutes = (slotToMs(cand.nextSlot) - slotToMs(cand.slot)) / 60_000;
+if (!(slotGapMinutes >= 1 && slotGapMinutes <= 10080)) {
+  fail(`current-candidates.json: nextSlot（${cand.nextSlot}）が slot（${cand.slot}）の次枠として不正です`);
 }
 if (Number.isNaN(Date.parse(cand.generatedAt))) {
   fail('current-candidates.json: generatedAt が日時として読めません');
@@ -209,3 +235,22 @@ for (const c of cand.candidates) {
 console.log(
   `✅ current-candidates.json slot=${cand.slot} 候補${cand.candidates.length}件 OK（次回: ${cand.nextSlot} / source: ${cand.source}）`,
 );
+
+// --- data/breeding-state.json（配合ワーカーの実行状態 / issue #15） ----------
+// 「前回の配合成功日時」を永続化し、間隔内のAI重複実行を防ぐ状態ファイル。
+// 候補更新の状態（current-candidates.json の slot）とは別物。
+const STATE_FILE = new URL('../data/breeding-state.json', import.meta.url);
+if (existsSync(STATE_FILE)) {
+  let stateRaw: unknown;
+  try {
+    stateRaw = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+  } catch (e) {
+    fail(`data/breeding-state.json を読めません: ${String(e)}`);
+  }
+  if (!isBreedingState(stateRaw)) fail('data/breeding-state.json の形式が不正です');
+  console.log(
+    `✅ breeding-state.json OK（前回成功: ${stateRaw.lastSuccessAt ?? 'なし'} / 連続失敗: ${stateRaw.consecutiveFailures} 回）`,
+  );
+} else {
+  console.log('ℹ️ breeding-state.json は無し（配合ワーカー初回実行時に作成されます）');
+}

@@ -2,7 +2,15 @@ import './style.css';
 import type { Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
 import { newIssueUrl, repoConfigFromEnv } from '../lib/config.ts';
 import { CANDIDATES_PER_SLOT, isCandidatesFile, type CandidatesFile } from '../lib/candidates.ts';
-import { slotKey } from '../lib/generation.ts';
+import {
+  breedingNotice,
+  breedingShareText,
+  candidateChipText,
+  candidateNotice,
+  intervalLabel,
+  resolveSchedule,
+} from '../lib/schedule.ts';
+import rawSchedule from '../config/schedule.json';
 import rawOffspring from '../data/offspring.json';
 import rawCandidates from '../data/current-candidates.json';
 import sampleWorksJson from '../data/protopedia-sample.json';
@@ -27,10 +35,18 @@ const offspring = (rawOffspring as unknown as Offspring[]).slice();
 const sampleWorks = (sampleWorksJson as { works: ProtopediaWork[] }).works;
 const sampleOffspring = (rawSampleOffspring as unknown as Offspring[]).slice();
 
-// 15分ごとの配合候補（data/current-candidates.json。Actions「Rotate candidates」が15分ごと更新）。
+// 頻度設定（config/schedule.json / issue #15）: 「1時間に1回」「15分ごと」の
+// 固定文言はやめ、設定値から文言・次回時刻を生成する。
+// 不正なら既定値で描画を続けエラーを告知（Worker側は同じ設定で exit 1 = 処理停止）。
+const schedule = resolveSchedule(rawSchedule);
+const scheduleCfg = schedule.config;
+// 候補件数の上限を引き下げた直後の既存ファイルを壊さないよう、読み取りガードは max(設定, 既定)。
+const candFileMax = Math.max(scheduleCfg.maxCandidates, CANDIDATES_PER_SLOT);
+
+// 配合候補（data/current-candidates.json。Actions「Rotate candidates」が設定間隔で更新）。
 // ブラウザからProtoPedia APIは呼ばない。ページ再読み込みで候補は変わらない。
 // 形が想定外なら開発用サンプルに落とし、[SAMPLE] 表記で本番と明確に区別する。
-const candidatesFile: CandidatesFile | null = isCandidatesFile(rawCandidates)
+const candidatesFile: CandidatesFile | null = isCandidatesFile(rawCandidates, candFileMax)
   ? rawCandidates
   : null;
 const usingSampleCandidates = candidatesFile === null;
@@ -159,10 +175,17 @@ themeBtn.addEventListener('click', () => {
   updateThemeBtn();
 });
 
+// --- ファーストビュー（issue #14） -------------------------------------------
+// 構成（上から順）: ①「Mashup Ours」（最も大きく）+ ②コピー → ③メインビジュアル
+// （左=親Aカプセル / 中央=配合装置 / 右=親Bカプセル、パイプで接続、左右に研究員）→
+// ④大見出し+補足 → ⑤ボタン「発明を配合する」「発明の系譜図を見る」。
+// 参考画像はデザイン参考のみ。背景画像は敷かず、装置・カプセルはHTML/CSSで作る。
+// 「16bit配合研究所」等のデザイン手法文言はFVから削除（issue #14 §1・§11）。
+// 選択・Issue申請の動作は既存フロー（候補カード・発明配合マシン）をそのまま使う。
+
 const heroLeft = el(
   'div',
   {},
-  el('p', { class: 'eyebrow' }, '— 16bit 配合研究所 —'),
   el('div', { class: 'hero-title-row' }, logoSprite(), el('h1', {}, 'Mashup Ours')),
   el('p', { class: 'copy' }, '20年分の発明を、もう一度マッシュアップ。'),
 );
@@ -172,24 +195,93 @@ wrap.append(
 );
 updateThemeBtn();
 
-// --- 博士キャラクター（issue #11 追加指示 §5: トップ=2人そろって挨拶） ------
+// --- メインビジュアル: 左右カプセル + 中央配合装置 + 研究員2人（issue #14 §5・§6） ---
 // キャラの状態は breeding-state.ts の観測結果だけが変える（操作と連動）。
+// 最重要: 選択やカプセルの表示だけでAI配合処理は開始しない（実際の申請はGitHub Issue）。
 
 const bannoGreet = createCharacter('banno');
 const higeGreet = createCharacter('higedaruma');
+// セリフウィンドウ（観測結果のあいさつが流れ続ける。長い技術説明はFVから削除）
 const greetLead = el('p', { class: 'greet-lead' }, observeView('nothing').greeting);
-const greetBody = el(
-  'p',
-  {},
-  '2つの発明を選んで配合すると、AIがあたらしい発明案を考えて示します。申し込みにはGitHubアカウントが要ります（閲覧はどなたでもOK）。生成されるのはすべて未実装のアイデアです。',
+
+const capsuleViewA: HTMLElement = el('div', { class: 'capsule-view' }, el('span', { class: 'capsule-q' }, '？'));
+const capsuleViewB: HTMLElement = el('div', { class: 'capsule-view' }, el('span', { class: 'capsule-q' }, '？'));
+const capsuleNameA = el('div', { class: 'capsule-name' }, '発明Aをえらんでね');
+const capsuleNameB = el('div', { class: 'capsule-name' }, '発明Bをえらんでね');
+
+/** カプセル1体（device=ドーム+覗き窓+台座 / tag / name はgrid各行へ配置）。 */
+function buildFvCapsule(slot: 'a' | 'b', view: HTMLElement, name: HTMLElement): HTMLElement {
+  return el(
+    'div',
+    { class: `capsule capsule-${slot}` },
+    el(
+      'div',
+      { class: 'capsule-device' },
+      el('div', { class: 'capsule-dome', 'aria-hidden': 'true' }),
+      el('div', { class: 'capsule-tube' }, view),
+      el('div', { class: 'capsule-base', 'aria-hidden': 'true' }),
+    ),
+    el('div', { class: 'capsule-tag' }, slot === 'a' ? '親となる発明 A' : '親となる発明 B'),
+    name,
+  );
+}
+
+// 中央の配合装置（画面×+操作盤+状態表示。状態文は updateFvLab が更新）
+const fvStatus = el('div', { class: 'fv-status' }, 'スタンバイ中 — 発明を2つえらんでね');
+const fvMachine = el(
+  'div',
+  { class: 'fv-machine' },
+  el(
+    'div',
+    { class: 'fv-machine-body' },
+    el('div', { class: 'fv-screen', 'aria-hidden': 'true' }, el('span', { class: 'fv-cross' }, '×')),
+    el(
+      'div',
+      { class: 'fv-deck', 'aria-hidden': 'true' },
+      el('span', { class: 'fv-key' }),
+      el('span', { class: 'fv-key' }),
+      el('span', { class: 'fv-key wide' }),
+      el('span', { class: 'fv-lamp' }),
+      el('span', { class: 'fv-lamp on' }),
+    ),
+  ),
+  fvStatus,
 );
+
+const fvScene = el(
+  'div',
+  { class: 'lab-scene' },
+  buildFvCapsule('a', capsuleViewA, capsuleNameA),
+  el('div', { class: 'pipe pipe-a', 'aria-hidden': 'true' }),
+  el('div', { class: 'lab-char left' }, bannoGreet.el),
+  fvMachine,
+  el('div', { class: 'lab-char right' }, higeGreet.el),
+  el('div', { class: 'pipe pipe-b', 'aria-hidden': 'true' }),
+  buildFvCapsule('b', capsuleViewB, capsuleNameB),
+);
+
 wrap.append(
   el(
     'div',
-    { class: 'char-greet window' },
-    bannoGreet.el,
-    higeGreet.el,
-    el('div', { class: 'greet-text' }, greetLead, greetBody),
+    { class: 'fv' },
+    fvScene,
+    el('div', { class: 'fv-greet window' }, greetLead),
+    el(
+      'div',
+      { class: 'fv-dialog window' },
+      el('p', { class: 'fv-lead' }, 'プロトタイプとプロトタイプを配合して、新しいアイデアを生み出そう！'),
+      el(
+        'p',
+        { class: 'fv-sub' },
+        'ProtoPediaに投稿された作品から2つを選ぶと、AIがそれぞれの特徴を組み合わせて、新しい発明アイデアを考えます。',
+      ),
+    ),
+    el(
+      'div',
+      { class: 'fv-actions' },
+      el('a', { class: 'fv-btn primary', href: '#candidates' }, '発明を配合する'),
+      el('a', { class: 'fv-btn', href: '#pedigree' }, '発明の系譜図を見る'),
+    ),
   ),
 );
 
@@ -200,8 +292,8 @@ wrap.append(
     'div',
     { class: 'memo window' },
     el('div', { class: 'titlebar' }, el('span', {}, '所長のメモ')),
-    el('p', {}, '15分ごとに新しい発明候補が届くよ！2つえらんで「配合を申し込む」と、GitHub Issueの申し込み画面が開きます。'),
-    el('p', {}, '配合は1時間に最大1件。この組み合わせ、何が生まれるんだろう？ 生成されるのはすべてAIが考えた未実装のアイデアです。'),
+    el('p', {}, `${candidateNotice(scheduleCfg)}2つえらんで「配合を申し込む」と、GitHub Issueの申し込み画面が開きます。`),
+    el('p', {}, `${breedingNotice(scheduleCfg)}全ユーザー共有です。この組み合わせ、何が生まれるんだろう？ 生成されるのはすべてAIが考えた未実装のアイデアです。`),
   ),
 );
 
@@ -246,6 +338,15 @@ if (!repoCfg) {
     ),
   );
 }
+if (schedule.error) {
+  wrap.append(
+    el(
+      'div',
+      { class: 'notice error window' },
+      `設定ファイル config/schedule.json が不正です（${schedule.error}）。表示は既定値（候補更新${intervalLabel(scheduleCfg.candidateRotationMinutes)}ごと・配合${intervalLabel(scheduleCfg.breedingIntervalMinutes)}ごと）で継続しています。`,
+    ),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // ① 今の15分枠の配合候補（1枠6件・全ユーザー共通。追加開発指示 §2/§3 / issue #10）
@@ -254,7 +355,8 @@ if (!repoCfg) {
 // 完成イメージ（tmp/CleanShot 2026-11-09 at 21.43.19.png）準拠:
 // パネル見出し「本日の発明研究所」+ ラテン小見出し + 右上バッジ。
 // その下に画像中心の3列カード（画像タイルが主役、キャプションは下に添える）。
-const candSection = el('section', { class: 'cand-section' });
+// id=candidates / id=pedigree はFVボタン（issue #14）のアンカー先
+const candSection = el('section', { class: 'cand-section', id: 'candidates' });
 const stateBadge = el('span', { class: 'chip' });
 const candMeta = el('div', { class: 'cand-meta' });
 const grid = el('div', { class: 'candidates' });
@@ -283,10 +385,8 @@ function fmtSlotUtc(slot: string): string {
   return `${m[1]}T${m[2]}:${m[3] ?? '00'} UTC`;
 }
 
-/** slot（UTC）を日本時間の表示に変換する。 */
-function fmtJst(slot: string): string {
-  const ms = slotToDate(slot);
-  if (Number.isNaN(ms)) return slot;
+/** ms時刻を日本時間の表示にする（次の配合目安など、slot文字列でない時刻用 / issue #15）。 */
+function fmtJstMs(ms: number): string {
   return new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo',
     month: 'numeric',
@@ -294,6 +394,13 @@ function fmtJst(slot: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(ms));
+}
+
+/** slot（UTC）を日本時間の表示に変換する。 */
+function fmtJst(slot: string): string {
+  const ms = slotToDate(slot);
+  if (Number.isNaN(ms)) return slot;
+  return fmtJstMs(ms);
 }
 
 if (candidatesFile) {
@@ -312,21 +419,22 @@ if (candidatesFile) {
       {},
       '次回の候補更新予定: ',
       el('span', { class: 'value' }, fmtSlotUtc(f.nextSlot)),
-      `（日本時間 ${fmtJst(f.nextSlot)} 頃・15分ごと更新）`,
+      `（日本時間 ${fmtJst(f.nextSlot)} 頃・${intervalLabel(scheduleCfg.candidateRotationMinutes)}ごと更新）`,
     ),
   );
   // Actionsの実行遅延はJSONの値（実行結果）ベースで表現する（端末時計で補完しない）。
-  // cron が15分境界の+4分（:04/:19/:34/:49）で走るため、そこへの猶予を足してから判定する。
-  const UPDATE_GRACE_MS = 6 * 60_000;
+  // ワークフローは15分間隔で起床し、スクリプトが設定間隔を判定してから
+  // コミット→Pages反映する。その全行程＋GitHub側の遅延を耐える猶予（issue #15）。
+  const UPDATE_GRACE_MS = 20 * 60_000;
   const nextMs = slotToDate(f.nextSlot);
   if (Number.isFinite(nextMs) && Date.now() > nextMs + UPDATE_GRACE_MS) {
     candMeta.append(
       el('div', { class: 'stale' }, '⚠ 候補更新が遅れています（Actionsの実行完了後に切り替わります）。'),
     );
   }
-  if (f.candidates.length < CANDIDATES_PER_SLOT) {
+  if (f.candidates.length < scheduleCfg.maxCandidates) {
     candMeta.append(
-      el('div', { class: 'hint' }, `現在の候補は${f.candidates.length}件です（最大${CANDIDATES_PER_SLOT}件）。`),
+      el('div', { class: 'hint' }, `現在の候補は${f.candidates.length}件です（最大${scheduleCfg.maxCandidates}件）。`),
     );
   }
 } else {
@@ -335,12 +443,14 @@ if (candidatesFile) {
   );
 }
 candMeta.append(
-  el('div', { class: 'hint' }, '候補は15分ごとに差し替わります。ページを再読み込みしても候補は変わりません。'),
+  el(
+    'div',
+    { class: 'hint' },
+    `候補は${intervalLabel(scheduleCfg.candidateRotationMinutes)}ごとに差し替わります。ページを再読み込みしても候補は変わりません。`,
+  ),
 );
 // 右上バッジ: サンプル表示中か本番候補かを常に見せる
-stateBadge.textContent = usingSampleCandidates
-  ? '開発用サンプル'
-  : `15分ごとに${CANDIDATES_PER_SLOT}件・全ユーザー共通`;
+stateBadge.textContent = usingSampleCandidates ? '開発用サンプル' : candidateChipText(scheduleCfg);
 if (usingSampleCandidates) stateBadge.classList.add('chip-warn');
 
 // --- 選択状態（親A / 親B） -------------------------------------------------
@@ -480,20 +590,31 @@ const statusRow = el(
   el('div', { class: 'side' }, el('span', { class: 'side-label' }, '親B'), statusB),
 );
 
-// 稼働状況と配合待ち（DESIGN.md §1: ファーストビュー圏で分かるように）
-const nowSlot = slotKey(new Date());
-const slotTaken = children.some((c) => c.slot === nowSlot && !c.sample);
+// 稼働状況と配合待ち（DESIGN.md §1: ファーストビュー圏で分かるように）。
+// 固定の「1時間枠」表記はやめ、config/schedule.json の間隔から次回の目安を計算する
+//（仕様は「間隔を空けて最大1件」。Actionsの遅延・失敗でずれる場合があるため目安と明示）。
+const breedingIntervalMs = scheduleCfg.breedingIntervalMinutes * 60_000;
+const lastBirthMs = children
+  .filter((c) => !c.sample)
+  .reduce((max, c) => Math.max(max, Date.parse(c.createdAt) || 0), 0);
+const nextBreedingHint =
+  lastBirthMs === 0
+    ? 'まだ配合の成功記録がありません（最初の申請を順次受け付けています）。'
+    : Date.now() < lastBirthMs + breedingIntervalMs
+      ? `次の配合の目安: 日本時間 ${fmtJstMs(lastBirthMs + breedingIntervalMs)} 頃（前回の誕生から間隔を空けて処理）。`
+      : '次の配合はただちに処理できます（申請の順次処理）。';
 const statusNote = el(
   'div',
   { class: 'slot' },
   el(
     'div',
     {},
-    '現在の配合枠（UTC）: ',
-    el('span', { class: 'value' }, nowSlot),
-    slotTaken ? ' — この枠はすでに1件生成済みです。' : ' — この枠はまだ空きがあります。',
+    '配合の間隔（設定値）: ',
+    el('span', { class: 'value' }, intervalLabel(scheduleCfg.breedingIntervalMinutes)),
+    '。',
+    nextBreedingHint,
   ),
-  el('div', {}, '配合は1時間に最大1件、全ユーザー共有です（ユーザーごとに毎時1回ではありません）。候補の更新とは別の処理です。'),
+  el('div', {}, breedingShareText(scheduleCfg)),
   repoCfg
     ? el(
         'div',
@@ -535,6 +656,7 @@ function setApplyPhase(phase: ApplyPhase): void {
   const v = applyView(phase);
   higeMachine.setState(v.state);
   higeMachine.setMessage(v.message);
+  updateFvLab(); // FV装置の状態表示も申請フェーズに追従（issue #14 §7）
 }
 
 const machine = el(
@@ -570,6 +692,62 @@ function pickText(id: string | null): string {
 function currentPair(): [ParentId, ParentId] | null {
   if (!pickA || !pickB || pickA === pickB) return null;
   return [pickA as ParentId, pickB as ParentId];
+}
+
+// --- FVカプセル・装置の連動（issue #14 §6・§7） -------------------------------
+// 選択状態・申請フェーズ・観測フェーズをカプセルの覗き窓と装置の状態表示へ反映する。
+// ※ カプセルの表示や2選択だけでAI配合処理は開始しない（実際の申請はGitHub Issue）。
+
+/** カプセル覗き窓を親選択に合わせて描き直す（未選択=「？」、無画像は8bitプレースホルダー）。 */
+function renderFvCapsule(
+  view: HTMLElement,
+  name: HTMLElement,
+  id: string | null,
+  emptyName: string,
+): void {
+  if (!id) {
+    view.replaceChildren(el('span', { class: 'capsule-q' }, '？'));
+    name.textContent = emptyName;
+    return;
+  }
+  const n = nodeById.get(id);
+  name.textContent = n ? n.title : id;
+  // 子作品は出典画像を持たない → プレースホルダー。ProtoPedia親は作品画像（読み込み失敗時も同様）。
+  const url = n && !isOffspring(n) && n.mainUrl ? n.mainUrl : null;
+  if (!url) {
+    view.replaceChildren(el('span', { class: 'capsule-q' }, '？'));
+    return;
+  }
+  const img = el('img', { src: url, alt: '' });
+  img.addEventListener('error', () => {
+    view.replaceChildren(el('span', { class: 'capsule-q' }, '？'));
+  });
+  view.replaceChildren(img);
+}
+
+/** 装置の状態表示文（§7 状態表。Issue作成画面を開いただけ=申請成功にしない）。 */
+function fvStatusText(): string {
+  if (applyPhase === 'opening') return '申請手続き中 — Issue作成画面で「送信」してね';
+  if (applyPhase === 'confirmed') return '配合申請受付！ 次の配合の処理を待つのじゃ';
+  if (applyPhase === 'unconfirmed') return '実験失敗？ 申請をまだ確認できません — 送信したか確認してもう一度読み込んでね';
+  if (observedPhase === 'fresh') return '新しい発明が誕生したぞ！';
+  if (observedPhase === 'generating') return '配合実験中 — AIが新しい発明を考えています';
+  if (observedPhase === 'queued') return '配合待ち — 次の配合枠まで待つのじゃ';
+  const selected = (pickA ? 1 : 0) + (pickB ? 1 : 0);
+  if (selected === 2) return '配合準備完了！ 「発明を配合する」から申し込むのじゃ';
+  if (selected === 1) return 'あと1つ — もう一方のカプセルに入れてね';
+  return 'スタンバイ中 — 発明を2つえらんでね';
+}
+
+/** FV全体（カプセル・装置・状態文）を選択と処理状態に連動させる。 */
+function updateFvLab(): void {
+  renderFvCapsule(capsuleViewA, capsuleNameA, pickA, '発明Aをえらんでね');
+  renderFvCapsule(capsuleViewB, capsuleNameB, pickB, '発明Bをえらんでね');
+  fvStatus.textContent = fvStatusText();
+  // 2作品そろい・申請フロー中でなく・実験中でもない = 「配合準備完了」（短い光/点滅）
+  const busy =
+    applyPhase !== 'idle' || observedPhase === 'fresh' || observedPhase === 'generating';
+  fvMachine.classList.toggle('is-ready', currentPair() !== null && !busy);
 }
 
 function refreshBreedButton(): void {
@@ -609,6 +787,7 @@ function updateSelectionUI(): void {
   const selected = (pickA ? 1 : 0) + (pickB ? 1 : 0);
   bannoGuide.setMessage(SELECT_MSGS[selected]);
   refreshBreedButton();
+  updateFvLab(); // FVカプセルへ選択を反映（issue #14 §6）
 }
 
 // ライブ観測のガード（追加指示 §10 / 最重要事項）:
@@ -662,6 +841,7 @@ function applyObservation(phase: ObservePhase): void {
   bannoGreet.setState(view.bothState);
   higeGreet.setState(view.bothState);
   greetLead.textContent = view.greeting;
+  updateFvLab(); // FV装置の状態表示も観測結果に追従（issue #14 §7）
 }
 
 /**
@@ -775,7 +955,7 @@ wrap.append(listSection);
 
 const pedSection = el(
   'section',
-  {},
+  { id: 'pedigree' }, // FVボタン「発明の系譜図を見る」のアンカー先（issue #14）
   el('h2', {}, '発明の系譜図'),
   el(
     'p',

@@ -103,6 +103,56 @@ describe('nextSlotKey', () => {
   });
 });
 
+// --- スロット間隔の設定化（config/schedule.json / issue #15） -----------------
+
+describe('スロット間隔パラメータ（間隔は設定値 / issue #15）', () => {
+  it('指定した間隔の境界へ切り下げる（60分・120分・10分）', () => {
+    expect(candidateSlotKey(new Date('2026-11-09T14:07:00Z'), 60)).toBe('2026-11-09T1400');
+    expect(candidateSlotKey(new Date('2026-11-09T14:59:00Z'), 60)).toBe('2026-11-09T1400');
+    expect(candidateSlotKey(new Date('2026-11-09T15:00:00Z'), 60)).toBe('2026-11-09T1500');
+    // 120分は2時間境界（UTCは日跨ぎなくエポック基準で切れる）
+    expect(candidateSlotKey(new Date('2026-11-09T14:37:00Z'), 120)).toBe('2026-11-09T1400');
+    expect(candidateSlotKey(new Date('2026-11-09T14:07:00Z'), 10)).toBe('2026-11-09T1400');
+    expect(candidateSlotKey(new Date('2026-11-09T14:12:00Z'), 10)).toBe('2026-11-09T1410');
+    // 60で割り切れない間隔でもエポック基準で正しく切れる（1440%7=5 の日跨ぎシフトも含む）
+    expect(candidateSlotKey(new Date('2026-11-09T23:58:00Z'), 7)).toBe('2026-11-09T2356');
+  });
+
+  it('間隔が不正なら例外（0・小数は受け付けない）', () => {
+    expect(() => candidateSlotKey(new Date(), 0)).toThrow('slotMinutes');
+    expect(() => candidateSlotKey(new Date(), -15)).toThrow('slotMinutes');
+    expect(() => candidateSlotKey(new Date(), 1.5)).toThrow('slotMinutes');
+    expect(() => nextSlotKey('2026-11-09T1400', 0)).toThrow('slotMinutes');
+  });
+
+  it('nextSlotKey は指定間隔で進める', () => {
+    expect(nextSlotKey('2026-11-09T1400', 60)).toBe('2026-11-09T1500');
+    expect(nextSlotKey('2026-11-09T1400', 120)).toBe('2026-11-09T1600');
+    expect(nextSlotKey('2026-11-09T2345', 15)).toBe('2026-11-10T0000');
+  });
+
+  it('buildCandidatesFile は opts で件数と次枠を変える', () => {
+    const few = buildCandidatesFile(pool, '2026-11-09T1400', 'data/sample-prototypes.json', new Date(), {
+      maxCandidates: 3,
+    });
+    expect(few.candidates).toHaveLength(3);
+    const hourly = buildCandidatesFile(pool, '2026-11-09T1400', 'data/sample-prototypes.json', new Date(), {
+      slotMinutes: 60,
+    });
+    expect(hourly.nextSlot).toBe('2026-11-09T1500');
+  });
+
+  it('isCandidatesFile は maxCandidates 引数で上限判定する', () => {
+    const f = buildCandidatesFile(pool, '2026-11-09T1400', 'data/sample-prototypes.json', new Date(), {
+      maxCandidates: 8,
+    });
+    expect(f.candidates).toHaveLength(8);
+    expect(isCandidatesFile(f, 8)).toBe(true);
+    expect(isCandidatesFile(f, 6)).toBe(false); // 既定上限なら拒否
+    expect(isCandidatesFile(f)).toBe(false); // 引数省略 = 既定6
+  });
+});
+
 describe('buildCandidatesFile', () => {
   it('slot / generatedAt / nextSlot / 候補を記録する', () => {
     const now = new Date('2026-11-09T14:05:00Z');

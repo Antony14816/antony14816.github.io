@@ -214,14 +214,6 @@ header.hero {
   gap: 12px;
 }
 
-.eyebrow {
-  font-family: var(--font-dot);
-  color: var(--text-dim);
-  font-size: 0.82rem;
-  letter-spacing: 0.3em;
-  margin: 0 0 8px;
-}
-
 .hero-title-row {
   display: flex;
   align-items: center;
@@ -1284,35 +1276,421 @@ li.idea-item {
   display: none;
 }
 
-/* トップの挨拶（2人） */
-.char-greet {
+/* =========================================================================
+   ファーストビュー: 発明配合マシンの可視化（issue #14）
+   ゲームボーイ8bit調の5色パレット（クリーム+緑・太い輪郭）。
+   装置・カプセル・パイプ・研究員は両テーマ共通の固定色（ダークでも崩さない）。
+   参考画像はデザイン参考のみ — 背景画像は敷かずHTML/CSSで構成する。
+   ========================================================================= */
+
+/* 5色パレット（issue #14 §4。厳密5色でなくてよいが統一感を保つ） */
+:root {
+  --fv-bg: #f6f0d8; /* クリーム（背景） */
+  --fv-green-l: #b8d895; /* 明るい緑 */
+  --fv-green-m: #719c69; /* 中間の緑 */
+  --fv-green-d: #285747; /* 濃い緑 */
+  --fv-ink: #163d32; /* 最暗（輪郭・文字） */
+  --fv-window: #fffdf4; /* 覗き窓の地色（クリームより明るい） */
+}
+
+/* --- メインビジュアル（左カプセル / 中央装置 / 右カプセル + 研究員） ------- */
+
+.fv {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 16px 26px;
-  padding: 16px 18px;
+  flex-direction: column;
+  gap: 14px;
+  margin: 18px auto 0;
+  max-width: 1060px;
 }
 
-.char-greet .greet-text {
-  flex: 1 1 260px;
+/* 7列構成: 研究員(chL/chR)に専用列を持たせ、状態表示・名前と重ならない。
+   パイプ(pA/pB)は行1で2列をまたいで装置まで届く。 */
+.lab-scene {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) clamp(16px, 2.4vw, 34px) auto minmax(150px, 1.4fr)
+    auto clamp(16px, 2.4vw, 34px) minmax(0, 1fr);
+  grid-template-areas:
+    "devA  pA   pA    mach   pB    pB   devB"
+    "tagA  chL  chL   mstat  chR   chR   tagB"
+    "nameA chL  chL   mstat  chR   chR   nameB";
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  gap: 10px 6px;
+  padding: 18px 14px;
+  background: var(--fv-bg);
+  border: 3px solid var(--fv-ink);
+  box-shadow:
+    inset 0 0 0 2px var(--fv-green-l),
+    5px 5px 0 var(--shadow);
+}
+
+/* カプセルはgridセルを直接並べる（display:contents で device/tag/name が各行へ） */
+.capsule {
+  display: contents;
+}
+
+.capsule-a .capsule-device {
+  grid-area: devA;
+}
+
+.capsule-a .capsule-tag {
+  grid-area: tagA;
+}
+
+.capsule-a .capsule-name {
+  grid-area: nameA;
+}
+
+.capsule-b .capsule-device {
+  grid-area: devB;
+}
+
+.capsule-b .capsule-tag {
+  grid-area: tagB;
+}
+
+.capsule-b .capsule-name {
+  grid-area: nameB;
+}
+
+/* カプセル本体: ドーム + 覗き窓チューブ + 台座（ドームと台座を同高にし、
+   覗き窓の中心 = カプセル中心 = パイプの高さに揃える） */
+.capsule-device {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   min-width: 0;
+  border: 3px solid var(--fv-ink);
+  border-radius: 16px 16px 6px 6px;
+  background: var(--fv-green-l);
+  overflow: hidden;
 }
 
-.greet-text p {
-  margin: 0 0 6px;
-  font-size: 0.95rem;
-  line-height: 1.65;
+.capsule-dome {
+  height: clamp(16px, 2.4vw, 24px);
+  background: var(--fv-green-l);
+  border-bottom: 3px solid var(--fv-ink);
 }
 
-.greet-text p:last-child {
-  margin-bottom: 0;
+.capsule-tube {
+  padding: 7px;
+  background: var(--fv-green-m);
 }
 
-.greet-text .greet-lead {
+.capsule-base {
+  height: clamp(16px, 2.4vw, 24px);
+  background: var(--fv-green-d);
+  border-top: 3px solid var(--fv-ink);
+}
+
+/* 覗き窓: 未選択=「？」/ 選択=作品画像（実画像はピクセル化しない） */
+.capsule-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  background: var(--fv-window);
+  border: 3px solid var(--fv-ink);
+  overflow: hidden;
+}
+
+.capsule-view img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.capsule-q {
+  font-family: var(--font-dot);
+  font-size: clamp(1.4rem, 4vw, 2.4rem);
+  line-height: 1;
+  color: var(--fv-green-d);
+}
+
+.capsule-tag {
+  justify-self: center;
+  padding: 3px 9px;
+  background: var(--fv-green-d);
+  border: 3px solid var(--fv-ink);
+  color: var(--fv-bg);
+  font-family: var(--font-dot);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.capsule-name {
+  justify-self: center;
+  max-width: 100%;
+  /* シーン地はクリーム（固定色）なのでダークでも固定インクで読める */
+  color: var(--fv-ink);
+  font-family: var(--font-dot);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* カプセルと装置をつなぐパイプ（行1の中央 = 覗き窓/画面の中心） */
+.pipe {
+  height: clamp(14px, 2vw, 18px);
+  align-self: center;
+  background: var(--fv-green-m);
+  border-top: 3px solid var(--fv-ink);
+  border-bottom: 3px solid var(--fv-ink);
+}
+
+.pipe-a {
+  grid-area: pA;
+}
+
+.pipe-b {
+  grid-area: pB;
+}
+
+/* 中央の配合装置（画面× + 操作盤 + 状態表示） */
+.fv-machine {
+  display: contents;
+}
+
+.fv-machine-body {
+  grid-area: mach;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: clamp(110px, 16vw, 150px);
+  padding: 14px;
+  background: var(--fv-green-m);
+  border: 3px solid var(--fv-ink);
+  border-radius: 8px;
+  box-shadow: 5px 5px 0 var(--shadow);
+}
+
+.fv-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(72px, 11vw, 116px);
+  aspect-ratio: 1;
+  background: var(--fv-ink);
+  border: 3px solid var(--fv-ink);
+  box-shadow: inset 0 0 0 3px var(--fv-green-d);
+}
+
+.fv-cross {
+  font-family: var(--font-dot);
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  line-height: 1;
+  color: var(--fv-green-l);
+}
+
+.fv-deck {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fv-key {
+  width: 16px;
+  height: 10px;
+  background: var(--fv-bg);
+  border: 2px solid var(--fv-ink);
+}
+
+.fv-key.wide {
+  width: 30px;
+  margin-right: auto;
+}
+
+.fv-lamp {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--fv-green-d);
+  border: 2px solid var(--fv-ink);
+}
+
+.fv-lamp.on {
+  background: var(--fv-green-l);
+}
+
+/* 装置の状態表示（§7 状態表: スタンバイ/準備完了/申請手続き中/実験中…） */
+.fv-status {
+  grid-area: mstat;
+  align-self: center;
+  padding: 10px 12px;
+  background: var(--window);
+  border: 3px solid var(--line);
+  box-shadow:
+    inset 0 0 0 2px var(--inner),
+    4px 4px 0 var(--shadow);
+  color: var(--text);
+  font-family: var(--font-dot);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* 「配合準備完了」の短い点滅（prefers-reduced-motion で停止） */
+.fv-machine.is-ready .fv-screen {
+  animation: fv-ready-blink 1s steps(1, end) infinite;
+}
+
+.fv-machine.is-ready .fv-cross {
+  animation: fv-ready-cross 1s steps(1, end) infinite;
+}
+
+@keyframes fv-ready-blink {
+  0%,
+  100% {
+    background: var(--fv-ink);
+  }
+  50% {
+    background: var(--fv-green-l);
+  }
+}
+
+@keyframes fv-ready-cross {
+  0%,
+  100% {
+    color: var(--fv-green-l);
+  }
+  50% {
+    color: var(--fv-ink);
+  }
+}
+
+/* --- 研究員（装置が主役・小さめに左右へ。実名・公式キャラクター表記なし） -- */
+.lab-char.left {
+  grid-area: chL;
+}
+
+.lab-char.right {
+  grid-area: chR;
+}
+
+.lab-char .char {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.lab-char .char-img {
+  width: clamp(52px, 8vw, 88px);
+  height: auto;
+}
+
+/* FVではセリフを別ウィンドウ（.fv-greet）に集約し、キャラの吹き出しは畳む */
+.lab-char .char-msg {
+  display: none;
+}
+
+/* --- セリフウィンドウ / 大見出し / ボタン --------------------------------- */
+
+.fv-greet {
+  padding: 12px 16px;
+}
+
+.fv-greet .greet-lead {
+  margin: 0;
   font-family: var(--font-dot);
   font-size: 1.02rem;
   letter-spacing: 0.06em;
   color: var(--text);
+}
+
+.fv-dialog {
+  padding: 16px 18px;
+}
+
+.fv-lead {
+  margin: 0 0 8px;
+  font-family: var(--font-dot);
+  font-size: clamp(1.05rem, 2.6vw, 1.45rem);
+  line-height: 1.55;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.fv-lead::before {
+  content: '▶';
+  margin-right: 0.4em;
+  color: var(--link);
+}
+
+.fv-sub {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.fv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 2px;
+}
+
+.fv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 13px 22px;
+  background: var(--fv-green-l);
+  border: 3px solid var(--fv-ink);
+  box-shadow: 5px 5px 0 var(--shadow);
+  color: var(--fv-ink);
+  font-family: var(--font-dot);
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fv-btn::before {
+  content: '▶';
+  font-size: 0.85em;
+}
+
+.fv-btn.primary {
+  background: var(--fv-green-d);
+  color: var(--fv-bg);
+}
+
+.fv-btn:hover {
+  box-shadow: 3px 3px 0 var(--shadow);
+  transform: translate(2px, 2px);
+}
+
+.fv-btn:active {
+  box-shadow: 1px 1px 0 var(--shadow);
+  transform: translate(4px, 4px);
+}
+
+/* FVボタンのアンカー先（候補パネル・系譜図） */
+#candidates,
+#pedigree {
+  scroll-margin-top: 14px;
 }
 
 /* 親選択パネルの案内（案内役の博士） */
@@ -1349,11 +1727,73 @@ li.idea-item {
     flex: 1 1 200px;
   }
 
-  .char-greet {
-    padding: 14px;
+  /* FV: 装置を縮小・研究員を最終行へ・ボタン縦組みで横スクロール禁止（issue #14 §9） */
+  .lab-scene {
+    grid-template-areas:
+      "devA  pA   pA    mach   pB    pB   devB"
+      "tagA  tagA tagA  mstat  tagB  tagB tagB"
+      "nameA nameA nameA mstat nameB nameB nameB"
+      "chL   chL  chL   .      chR   chR  chR";
+    grid-template-columns:
+      minmax(0, 1fr) clamp(10px, 3vw, 20px) minmax(50px, auto)
+      minmax(98px, 1.2fr) minmax(50px, auto) clamp(10px, 3vw, 20px) minmax(0, 1fr);
+    gap: 8px 3px;
+    padding: 12px 8px;
+  }
+
+  .lab-char.left {
+    justify-self: end;
+  }
+
+  .lab-char.right {
+    justify-self: start;
+  }
+
+  .lab-char .char-img {
+    width: clamp(38px, 10vw, 54px);
+  }
+
+  .fv-machine-body {
+    min-height: 92px;
+    padding: 9px;
+    box-shadow: 3px 3px 0 var(--shadow);
+  }
+
+  .fv-screen {
+    width: clamp(46px, 14vw, 72px);
+    box-shadow: inset 0 0 0 2px var(--fv-green-d);
+  }
+
+  .fv-deck {
+    display: none; /* 操作盤は装飾。狭い画面では装置と状態表示を優先 */
+  }
+
+  .fv-status {
+    padding: 8px;
+    font-size: 0.85rem;
+  }
+
+  .capsule-tag {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+  }
+
+  .fv-actions {
+    flex-direction: column;
+  }
+
+  .fv-btn {
+    width: 100%;
   }
 
   .ped-char {
     margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fv-machine.is-ready .fv-screen,
+  .fv-machine.is-ready .fv-cross {
+    animation: none;
   }
 }

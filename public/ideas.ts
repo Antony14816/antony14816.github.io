@@ -1,10 +1,12 @@
 import './style.css';
 import type { Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
 import { repoConfigFromEnv } from '../lib/config.ts';
-import { isCandidatesFile } from '../lib/candidates.ts';
+import { CANDIDATES_PER_SLOT, isCandidatesFile } from '../lib/candidates.ts';
+import { intervalLabel, resolveSchedule } from '../lib/schedule.ts';
 import rawOffspring from '../data/offspring.json';
 import rawCandidates from '../data/current-candidates.json';
 import sampleWorksJson from '../data/protopedia-sample.json';
+import rawSchedule from '../config/schedule.json';
 
 /**
  * /ideas — 生み出されたアイデア一覧（issue #8）。
@@ -14,9 +16,17 @@ import sampleWorksJson from '../data/protopedia-sample.json';
  * リポジトリ名はハードコードしない。
  */
 
+// 頻度設定（config/schedule.json / issue #15）: 間隔の文言は設定値から生成する。
+const { config: scheduleCfg } = resolveSchedule(rawSchedule);
+
 const offspring = (rawOffspring as unknown as Offspring[]).slice();
 const sampleWorks = (sampleWorksJson as { works: ProtopediaWork[] }).works;
-const candWorks = isCandidatesFile(rawCandidates) ? rawCandidates.candidates : [];
+const candWorks = isCandidatesFile(
+  rawCandidates,
+  Math.max(scheduleCfg.maxCandidates, CANDIDATES_PER_SLOT),
+)
+  ? rawCandidates.candidates
+  : [];
 
 const repoCfg = repoConfigFromEnv({
   VITE_GITHUB_OWNER: import.meta.env.VITE_GITHUB_OWNER,
@@ -173,7 +183,7 @@ export function buildIdeasPage(
   const wrap = el('div', { class: 'wrap' });
   host.append(wrap);
 
-  // --- ヘッダー（トップと同型: eyebrow + h1 + コピー + テーマ切替 + 戻る） ---
+  // --- ヘッダー（トップと同型: h1 + コピー + テーマ切替 + 戻る） ---
   const themeBtn = el('button', { class: 'theme-toggle', type: 'button' }) as HTMLButtonElement;
   const updateThemeBtn = (): void => {
     const t = currentTheme();
@@ -206,7 +216,6 @@ export function buildIdeasPage(
         el(
           'div',
           {},
-          el('p', { class: 'eyebrow' }, '— 16bit 配合研究所 —'),
           el('h1', {}, '生み出されたアイデア'),
           el('p', { class: 'copy' }, 'AIが考えた未実装の発明アイデアを、すべてここに。'),
           el('p', { class: 'ideas-back' }, el('a', { href: ctx.base }, '← 研究所トップへ戻る')),
@@ -265,7 +274,7 @@ export function buildIdeasPage(
         el(
           'p',
           {},
-          '研究所トップで発明を2つえらんで「配合を申し込む」と、AIがあたらしい発明案を考えます。配合は1時間に最大1件（全員で共有）。',
+          `研究所トップで発明を2つえらんで「配合を申し込む」と、AIがあたらしい発明案を考えます。配合は${intervalLabel(scheduleCfg.breedingIntervalMinutes)}に最大1件（全員で共有）。`,
         ),
         el('p', {}, el('a', { href: ctx.base }, '研究所トップへ →')),
       ),

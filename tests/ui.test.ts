@@ -90,6 +90,23 @@ it('候補スロット・次回更新予定・全ユーザー共有の案内が�
   expect(text).toContain('ページを再読み込みしても候補は変わりません');
 });
 
+it('頻度の文言が config/schedule.json から生成される（固定文言なし / issue #15）', async () => {
+  const { breedingNotice, candidateNotice, parseScheduleConfig } = await import('../lib/schedule.ts');
+  const raw: unknown = (await import('../config/schedule.json')).default;
+  const parsed = parseScheduleConfig(raw);
+  expect(parsed.ok).toBe(true); // 出荷している設定は常に有効
+  if (!parsed.ok) return;
+
+  await boot();
+  const text = document.body.textContent ?? '';
+  expect(text).toContain(candidateNotice(parsed.config)); // 「◯ごとに新しい発明候補が届くよ！」
+  expect(text).toContain(breedingNotice(parsed.config)); // 「◯に最大1つ、新しい発明が誕生します！」
+  expect(text).toContain('配合の間隔（設定値）');
+  // 「1時間に1回」「毎時」などの固定文言はサイトから消えている
+  expect(text).not.toContain('毎時');
+  expect(text).not.toContain('1時間に1回');
+});
+
 it('選択前は配合申請ボタンが無効', async () => {
   const { breedButton, statusVals } = await boot();
   expect(breedButton().disabled).toBe(true);
@@ -243,14 +260,110 @@ function repoConfigured(): boolean {
 
 // --- 博士キャラクター（issue #11 追加指示 §5・§7・§10 最重要事項） ----------
 
-it('トップに2人の博士が挨拶ウィンドウで表示される', async () => {
+it('トップに2人の博士がFVの左右に表示され、挨拶ウィンドウがある', async () => {
   await boot();
-  const chars = document.querySelectorAll('.char-greet .char');
+  const chars = document.querySelectorAll('.lab-scene .char');
   expect(chars.length).toBe(2);
   expect((chars[0] as HTMLElement).dataset.char).toBe('banno');
   expect((chars[1] as HTMLElement).dataset.char).toBe('higedaruma');
   const lead = document.querySelector('.greet-lead')?.textContent ?? '';
   expect(lead).toContain('配合する研究所');
+});
+
+// --- ファーストビュー改修（issue #14） ---------------------------------------
+
+it('FVの構成: タイトル・コピー・大見出し・2ボタン・16bit表記なし', async () => {
+  await boot();
+  const text = document.body.textContent ?? '';
+  // ①タイトル（最も大きく）+ ②コピー
+  expect(document.querySelector('.hero h1')?.textContent).toBe('Mashup Ours');
+  expect(document.querySelector('.hero .copy')?.textContent).toBe(
+    '20年分の発明を、もう一度マッシュアップ。',
+  );
+  // ④大見出し + 補足
+  expect(document.querySelector('.fv-lead')?.textContent).toBe(
+    'プロトタイプとプロトタイプを配合して、新しいアイデアを生み出そう！',
+  );
+  expect(document.querySelector('.fv-sub')?.textContent).toContain('ProtoPediaに投稿された作品から2つ');
+  // ⑤ボタンはアンカー先のセクションへ移動
+  const btnA = document.querySelector<HTMLAnchorElement>('a.fv-btn.primary');
+  const btnB = document.querySelector<HTMLAnchorElement>('a.fv-btn:not(.primary)');
+  expect(btnA?.getAttribute('href')).toBe('#candidates');
+  expect(btnA?.textContent).toContain('発明を配合する');
+  expect(btnB?.getAttribute('href')).toBe('#pedigree');
+  expect(btnB?.textContent).toContain('発明の系譜図を見る');
+  expect(document.querySelector('#candidates')).toBeTruthy();
+  expect(document.querySelector('#pedigree')).toBeTruthy();
+  // ③メインビジュアル: 左右カプセル + 中央装置 + パイプ + 研究員2人
+  expect(document.querySelector('.lab-scene .capsule-a')).toBeTruthy();
+  expect(document.querySelector('.lab-scene .capsule-b')).toBeTruthy();
+  expect(document.querySelector('.lab-scene .fv-machine-body')).toBeTruthy();
+  expect(document.querySelectorAll('.lab-scene .pipe').length).toBe(2);
+  // §1: デザイン手法文言「16bit」はFV・サイトから削除
+  expect(text).not.toContain('16bit');
+});
+
+it('カプセルは選択に連動（未選択=「？」→ 2選択で配合準備完了。選択だけで申請しない）', async () => {
+  const { pickBtn } = await boot();
+  const nameA = () => document.querySelector('.capsule-a .capsule-name')?.textContent ?? '';
+  const nameB = () => document.querySelector('.capsule-b .capsule-name')?.textContent ?? '';
+  const viewA = () => document.querySelector('.capsule-a .capsule-view')?.textContent ?? '';
+  const status = () => document.querySelector('.fv-status')?.textContent ?? '';
+  const machine = () => document.querySelector('.fv-machine') as HTMLElement;
+
+  // 初期: 未選択 =「？」・スタンバイ中・準備完了点滅なし
+  expect(viewA()).toContain('？');
+  expect(nameA()).toBe('発明Aをえらんでね');
+  expect(nameB()).toBe('発明Bをえらんでね');
+  expect(status()).toContain('スタンバイ中');
+  expect(machine().classList.contains('is-ready')).toBe(false);
+
+  const spy = vi.spyOn(window, 'open').mockReturnValue(null);
+
+  // 1作品: 片方だけ入る
+  pickBtn(0, 'a').click();
+  const titleA = document.querySelectorAll('.candidate')[0].querySelector('h3')?.firstChild?.textContent ?? '';
+  expect(nameA()).toBe(titleA);
+  expect(status()).toContain('あと1つ');
+  expect(machine().classList.contains('is-ready')).toBe(false);
+  expect(spy).not.toHaveBeenCalled(); // 選択だけでIssue/申請は始まらない
+
+  // 2作品: 配合準備完了（装置が点滅）
+  pickBtn(1, 'b').click();
+  expect(nameB()).not.toBe('発明Bをえらんでね');
+  expect(status()).toContain('配合準備完了');
+  expect(machine().classList.contains('is-ready')).toBe(true);
+  expect(spy).not.toHaveBeenCalled(); // 選択だけでAI配合処理は開始しない
+
+  spy.mockRestore();
+});
+
+it('同じ作品をAとBに両方選べない（反対側のカプセルは空に戻る）', async () => {
+  const { pickBtn } = await boot();
+  const nameA = () => document.querySelector('.capsule-a .capsule-name')?.textContent ?? '';
+  const nameB = () => document.querySelector('.capsule-b .capsule-name')?.textContent ?? '';
+  pickBtn(0, 'a').click();
+  expect(nameA()).not.toBe('発明Aをえらんでね');
+  pickBtn(0, 'b').click(); // 同一カード → Aが解除されBだけ残る
+  expect(nameA()).toBe('発明Aをえらんでね');
+  expect(nameB()).not.toBe('発明Bをえらんでね');
+});
+
+it('Issue作成画面を開いた直後はFV装置も「申請手続き中」（生成完了と表示しない）', async () => {
+  const { pickBtn, breedButton } = await boot();
+  const spy = vi.spyOn(window, 'open').mockReturnValue(null);
+  pickBtn(0, 'a').click();
+  pickBtn(1, 'b').click();
+  if (!breedButton().disabled) {
+    const status = () => document.querySelector('.fv-status')?.textContent ?? '';
+    expect(status()).toContain('配合準備完了');
+    breedButton().click();
+    expect(status()).toContain('申請手続き中');
+    expect(status()).not.toContain('誕生');
+    // 申請手続き中は「準備完了」点滅を止める
+    expect(document.querySelector('.fv-machine')?.classList.contains('is-ready')).toBe(false);
+  }
+  spy.mockRestore();
 });
 
 it('親の選択数に案内役の博士の案内が連動する（0→1→2）', async () => {

@@ -1,0 +1,5 @@
+{
+  "candidateRotationMinutes": 15,
+  "breedingIntervalMinutes": 60,
+  "maxCandidates": 6
+}

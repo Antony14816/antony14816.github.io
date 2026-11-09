@@ -12,15 +12,16 @@ ProtoPediaに公開された実在の作品を2つ「親」として選び、生
 | --- | --- |
 | 公開UI | GitHub Pages（Vite + TypeScript の静的サイト） |
 | 投稿 | GitHub Issues（サイトにログイン機能・書き込みトークンなし） |
-| 配合候補 | 15分ローテ → `data/current-candidates.json`（**ブラウザはProtoPedia APIを呼ばない**） |
+| 配合候補 | `config/schedule.json` の間隔（既定15分）ローテ → `data/current-candidates.json`（**ブラウザはProtoPedia APIを呼ばない**） |
 | 作品データ | ProtoPedia API v2 → 少数取得（`data/sample-prototypes.json` ほか）→ 候補プール |
-| 配合ワーカー | GitHub Actions（毎時実行 + 手動 `workflow_dispatch`） |
-| 永続データ | リポジトリ内の `data/offspring.json` |
+| 配合ワーカー | GitHub Actions（起床は一定間隔、実行可否は設定間隔で判定 + 手動 `workflow_dispatch`） |
+| 頻度設定 | `config/schedule.json`（候補更新間隔・配合間隔・候補件数をファイルで変更 / issue #15） |
+| 永続データ | リポジトリ内の `data/offspring.json` / `data/breeding-state.json` |
 | AI | Actions（サーバー側）から呼ぶ交換可能なプロバイダー |
 
-**1時間に1件だけAI配合が走ります（全ユーザー共有の枠）。** 閲覧・選択・系譜図表示にAIは使いません。
+**AI配合は設定間隔（既定60分=1時間）を空けて最大1件です（全ユーザー共有）。** 閲覧・選択・系譜図表示にAIは使いません。
 
-**候補は15分ごとに6件が全ユーザー共通**です。「本日の発明研究所」に並ぶ候補はスロット（UTC `YYYY-MM-DDTHHMM`・15分刻み）ごとに決定的に選ばれ、**ページを再読み込みしても変わりません**。自由検索はなく、候補から2作品（AとB）を選んで申請します。
+**候補は設定間隔（既定15分）ごとに最大6件が全ユーザー共通**です。「本日の発明研究所」に並ぶ候補はスロット（UTC `YYYY-MM-DDTHHMM`・設定間隔の刻み）ごとに決定的に選ばれ、**ページを再読み込みしても変わりません**。自由検索はなく、候補から2作品（AとB）を選んで申請します。
 
 ## セットアップ（ローカル開発）
 
@@ -56,6 +57,35 @@ npm run dev            # http://localhost:5173
 4. **Actions権限**: Settings → Actions → General → Workflow permissions を設定。JSONコミットには `contents: write`、Issue対応には `issues: write` を該当ジョブのみに付与。
 5. 配合申請はサイトの「配合を申し込む」ボタン → Issue作成画面が開く → **ユーザー自身が送信**。
 
+## 頻度設定（config/schedule.json）
+
+配合頻度・候補更新頻度・候補件数は設定ファイルで変更できる（issue #15）。**ファイルの変更をコミットするだけで反映**され、UIの文言・次回予定時刻もこの値から生成される。
+
+```json
+{
+  "candidateRotationMinutes": 15,
+  "breedingIntervalMinutes": 60,
+  "maxCandidates": 6
+}
+```
+
+| キー | 意味 | 既定 |
+| --- | --- | --- |
+| `candidateRotationMinutes` | 配合候補の更新間隔（分・正の整数、1〜10080） | 15 |
+| `breedingIntervalMinutes` | 配合（生成AI呼び出し）の間隔（分・正の整数）。**前回の成功からの空き時間** | 60 |
+| `maxCandidates` | 1枠の候補件数の上限（正の整数、1〜50） | 6 |
+| `dailyAiCallLimit`（任意） | UTC日ごとの生成AI呼び出し回数の上限（正の整数）。未設定 = 上限なし | なし |
+
+- **候補更新と配合処理は独立した設定**であり、UIでも混同しない（「◯ごとに新しい発明候補が届くよ！」と「◯に最大1つ、新しい発明が誕生します！」は別々のキーから生成）。「1時間に1回」「毎時」などの固定文言はサイトに存在しない。
+- **GitHub ActionsのcronはJSONを読めない**ため、ワークフローは一定間隔（15分）で「起床」し、スクリプト側が実行可否を判定する:
+  - 候補: `scripts/rotate-candidates.ts` が現在時刻から設定間隔でスロットを算出し、`data/current-candidates.json` の `slot` と比較。同一枠ならスキップ（= 二重生成しない）。**「間隔ごとに必ず生成」ではなく「間隔を空けて最大1件」**なので、Actionsの遅延があっても正常動作。手動実行（`workflow_dispatch`）も同じ判定を通る。
+  - 実効的な候補更新間隔 = **max(設定値, 起床間隔15分)**。15分未満の間隔にする場合は cron（`rotate-candidates.yml`）も合わせて短くすること。
+  - 配合: ワーカー（`breed.yml` / issue #6）が `shouldBreed()`（`lib/schedule.ts`）で判定。前回成功日時（`data/breeding-state.json`）と `breedingIntervalMinutes` を比較し、未経過なら生成AIを呼ばない。
+- **失敗時の再試行条件（明示）**: 失敗は間隔に数えないので次の起床で再試行できる（最大3回）。連続3回失敗すると間隔ぶんの冷却に入り、冷却経過で再開。成功でカウントはリセット。`dailyAiCallLimit` 設定時はUTC日単位で上限（失敗した試行も呼び出し回数に計上）。
+- **設定が不正なとき**: rotate / validate は exit 1 で処理を停止してエラーを通知（= AIを呼ばない）。フロントは既定値で表示を続けつつエラーを告知する。
+- 既存の `data/offspring.json`・Issue申請・`current-candidates.json` は変更不要（設定変更との互換性を維持）。
+- ローカル開発で枠内に再生成したいときだけ `npm run rotate:candidates -- --force`（ワークフローからは渡さない）。
+
 ## ProtoPedia作品の取得と候補ローテ（API v2）
 
 仕様は `docs/protopediaapi.md`（調査資料。**実接続で一部確認済み**、下「検証済みと未検証」参照）。実装は `lib/protopedia.ts` + `scripts/fetch-sample-prototypes.mjs` + `scripts/rotate-candidates.ts`。
@@ -65,18 +95,18 @@ ProtoPedia API v2 ──(Bearer)──> npm run fetch:sample（少数・手動 /
                                    │ 取得 → HTML除去・型検証・URL検証・ライセンス確認
                                    ▼
                           data/sample-prototypes.json（候補プール）
-                                   │ npm run rotate:candidates（15分ごと・API/トークン不要）
+                                   │ npm run rotate:candidates（configの間隔・既定15分ごと / APIトークン不要）
                                    ▼
                           data/current-candidates.json ──> GitHub Pages（静的import）
 ```
 
 - **試作段階では全件収集を開始しない**: `npm run fetch:sample` は既定12件（`--count=` 上限50 / `--offset=`）。
   全件同期は `npm run sync:protopedia`。`sync-prototypes.yml` は**手動 dispatch のみ**（有効化するときだけ `schedule` を戻す）。
-- **候補ローテ**: `npm run rotate:candidates` は保存済みプールからスロット（UTC `YYYY-MM-DDTHHMM`・15分刻み）に**決定的に**6件を選出。
-  同じスロットなら常に同じ6件（15分枠内のActionsの再実行・ローカル実行でも不変）。APIもトークンも使わない。
+- **候補ローテ**: `npm run rotate:candidates` は保存済みプールからスロット（UTC `YYYY-MM-DDTHHMM`・設定間隔の刻み）に**決定的に** `maxCandidates` 件を選出。
+  同じスロットなら常に同じ候補（枠内のActionsの再実行・ローカル実行でも不変）。APIもトークンも使わない。**前回と同一枠ならスキップ**（頻度制限。`--force` で解除）。
   `-- --slot=2026-11-09T1415` で任意の枠を検証、`-- --dry-run` で書き込まず確認。
-- **15分ごと更新**: `.github/workflows/rotate-candidates.yml`（cron `4/15 * * * *` + dispatch）がスロットを進めて `data/current-candidates.json` をコミット。
-  画面上の「次回の候補更新予定」はこの**実行結果（JSONの値）**ベースで、Actionsの遅延時は注意書きが出ます。
+- **起床は15分固定・実行可否はスクリプト判定**: `.github/workflows/rotate-candidates.yml`（cron `4/15 * * * *` + dispatch）が一定間隔で起動し、スクリプトが `config/schedule.json` の間隔と前回生成の `slot` から実行可否を判断して `data/current-candidates.json` をコミット（issue #15）。
+  画面上の「次回の候補更新予定」はこの**実行結果（JSONの値）**ベースで、遅延時は注意書きが出ます。
 - **失敗時の挙動**: 取得失敗・0件・不正レスポンスでは既存JSONを置き換えない（0件保存は拒否）。
 - **トークンの扱い**: `.env` / Secretsのみ。スクリプトがreadFileSyncで読む（シェルにexportしない）。ログ・JSON・コミット・フロントバンドルに入れない。
 - 作者（`表示名@handle` のまま保存 = クレジット用）・タグ・ライセンス・作品画像はこのJSONから表示。
@@ -91,7 +121,7 @@ parent_b: protopedia:5678
 parent_a_url: https://protopedia.net/prototype/1234 ← 表示・照合用の「データ」（httpsのみ）
 parent_b_url: https://protopedia.net/prototype/5678
 mode: fusion
-slot: 2026-11-09T1715                                ← 申請時の候補スロット（UTC・15分刻み。移行前のHH形式も許容）
+slot: 2026-11-09T1715                                ← 申請時の候補スロット（UTC・設定間隔の刻み＝既定15分。移行前のHH形式も許容）
 <!-- 任意: comment: の後に1行だけで自由記述（最大300字・配合の動機など） -->
 ```
 
@@ -162,9 +192,9 @@ slot: 2026-11-09T1715                                ← 申請時の候補ス�
 npm run dev             # 開発サーバー
 npm test                # パーサー・世代計算・候補選出・フロントのスモークテスト
 npm run build           # 型チェック + 本番ビルド
-npm run validate-data   # offspring / prototypes / sample-prototypes / current-candidates の検証
+npm run validate-data   # config/schedule + offspring / prototypes / sample-prototypes / current-candidates / breeding-state の検証
 npm run fetch:sample    # ProtoPediaから少数だけ取得 → data/sample-prototypes.json（トークン要）
-npm run rotate:candidates # 候補6件をスロットから決定的に選出 → data/current-candidates.json（トークン不要）
+npm run rotate:candidates # 候補をスロットから決定的に選出 → data/current-candidates.json（トークン不要・設定間隔の枠内ならスキップ / --force で解除）
 npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル + /ideas一覧のスクリーンショット（tmp/）
 ```
 
@@ -187,11 +217,12 @@ npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル +
 │   ├── assets/          # ビルド取り込み対象（博士スプライト8枚 透過PNG 135×268）
 │   └── static/          # そのまま配信する生ファイル（dist直下へコピー）
 │       └── sprites/     # ピクセル絵素材の原本（切り出し元）
-├── lib/                 # 型・Issueパーサー・世代計算・候補選出・ProtoPedia/設定（フロント/ワーカー共有）
-├── data/                # offspring.json / current-candidates.json / *sample*.json
+├── lib/                 # 型・Issueパーサー・世代計算・候補選出・頻度設定(schedule.ts)・ProtoPedia/設定（フロント/ワーカー共有）
+├── config/              # schedule.json（頻度設定: 候補更新間隔・配合間隔・候補件数 / issue #15）
+├── data/                # offspring.json / current-candidates.json / breeding-state.json / *sample*.json
 ├── logs/                # 開発ログ（public公開のため秘密情報は書かない / 書式は logs/README.md）
 ├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot / gh / slice-characters（博士スプライト切り出し）
 ├── tests/
 └── .github/workflows/   # deploy.yml / sync-prototypes.yml（dispatchのみ） /
-                         # rotate-candidates.yml（15分ごと） / breed.yml（実装予定）
+                         # rotate-candidates.yml（起床15分固定・間隔はconfig判定） / breed.yml（実装予定）
 ```

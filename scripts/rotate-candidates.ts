@@ -1,36 +1,70 @@
 /**
- * 15分ごとの配合候補の更新。（追加開発指示 §7 / issue #10）
+ * 配合候補の更新。（追加開発指示 §7 / issue #10、間隔の設定化 issue #15）
  *
- * 保存済みの作品データから、スロット（UTC "YYYY-MM-DDTHHMM"・15分刻み）に決定的に6件を選ぶ。
+ * 保存済みの作品データから、スロット（UTC "YYYY-MM-DDTHHMM"）に決定的に
+ * maxCandidates 件を選ぶ。
  * - 同じスロットなら常に同じ候補（Actionsの再実行・ローカル実行でも同じ結果）
  * - data/current-candidates.json に slot / generatedAt / nextSlot / 候補を記録
  * - プール0件・不正データ時は exit 1。既存の current-candidates.json は無変更。
+ *
+ * 実行可否（issue #15 §3/§4）:
+ * - cron は一定間隔で「起床」するだけ。間隔（candidateRotationMinutes）の判定は
+ *   ここが行う: 現在時刻から算出した currentSlot と既存ファイルの slot が一致すれば
+ *   まだ間隔が空いていない → 何もしない（AIは呼ばない・書き込まない）。
+ * - これにより「間隔ごとに必ず生成」ではなく「間隔を空けて最大1件」になり、
+ *   Actionsの遅延・手動実行（workflow_dispatch）でも二重生成しない。
+ * - --force はローカル開発用の明示的な制限解除（ワークフローからは渡さない）。
+ * - config/schedule.json が不正なら exit 1（= 処理を停止してエラーを通知）。
  *
  * 使い方:
  *   node --experimental-strip-types scripts/rotate-candidates.ts
  *   node --experimental-strip-types scripts/rotate-candidates.ts --slot=2026-11-09T1415
  *   node --experimental-strip-types scripts/rotate-candidates.ts --dry-run
+ *   node --experimental-strip-types scripts/rotate-candidates.ts --force
  *
  * ProtoPedia APIは呼ばない（トークン不要）。
  */
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildCandidatesFile, candidateSlotKey, nextSlotKey } from '../lib/candidates.ts';
 import {
-  CANDIDATES_PER_SLOT,
-  buildCandidatesFile,
-  candidateSlotKey,
-  nextSlotKey,
-} from '../lib/candidates.ts';
+  intervalLabel,
+  parseScheduleConfig,
+  type ScheduleConfig,
+} from '../lib/schedule.ts';
 import type { ProtopediaWork } from '../lib/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const OUT_PATH = fileURLToPath(new URL('../data/current-candidates.json', import.meta.url));
+const SCHEDULE_PATH = fileURLToPath(new URL('../config/schedule.json', import.meta.url));
 /** 候補元に使う保存済みデータ（優先順）。試作段階では sample-prototypes が実績を持つ。 */
 const POOL_FILES = [
   fileURLToPath(new URL('../data/prototypes.json', import.meta.url)),
   fileURLToPath(new URL('../data/sample-prototypes.json', import.meta.url)),
 ];
+
+/**
+ * config/schedule.json を読み込み検証する。
+ * 不正なら exit 1（設定が不正な場合は処理を停止してエラーを通知する / issue #15）。
+ */
+function loadSchedule(): ScheduleConfig {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(SCHEDULE_PATH, 'utf8'));
+  } catch (e) {
+    console.error(
+      `❌ config/schedule.json を読めないため処理を停止します: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    process.exit(1);
+  }
+  const parsed = parseScheduleConfig(raw);
+  if (!parsed.ok) {
+    console.error(`❌ config/schedule.json が不正なため処理を停止します: ${parsed.reason}`);
+    process.exit(1);
+  }
+  return parsed.config;
+}
 
 /** JSONには実行環境の絶対パスを書かない（リポジトリ相対で記録する）。 */
 function repoRelative(absPath: string): string {
@@ -57,20 +91,43 @@ function readPool(path: string): ProtopediaWork[] {
 }
 
 function main(): void {
+  const cfg = loadSchedule();
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
+  const force = args.includes('--force');
   const slotArg = args.find((a) => a.startsWith('--slot='));
-  const slot = slotArg ? slotArg.slice('--slot='.length) : candidateSlotKey(new Date());
+  const slot = slotArg
+    ? slotArg.slice('--slot='.length)
+    : candidateSlotKey(new Date(), cfg.candidateRotationMinutes);
   // 形式検証（不正なら例外で落とす = 書き込まない）
-  nextSlotKey(slot);
+  nextSlotKey(slot, cfg.candidateRotationMinutes);
 
-  // プール選択: 6件以上確保できるファイルを優先し、なければ件数の多いファイルへ。
+  // --- 実行可否（間隔制限 / issue #15 §3・§4） -------------------------------
+  // 前回の生成（既存ファイルの slot）と、設定間隔から算出した現在の slot が
+  // 一致すればまだ間隔が空いていない。dispatch の明示 slot 指定も同じ比較で通す
+  // （同一枠への再生成 = 二重処理はしない）。dry-run は書き込まないため判定のみ表示。
+  if (!force && existsSync(OUT_PATH)) {
+    let prevSlot: unknown;
+    try {
+      prevSlot = (JSON.parse(readFileSync(OUT_PATH, 'utf8')) as { slot?: unknown }).slot;
+    } catch {
+      prevSlot = undefined; // 壊れた既存ファイルは再生成する
+    }
+    if (prevSlot === slot) {
+      console.log(
+        `⏭ スキップ: slot=${slot} は生成済みです（候補の更新間隔は ${intervalLabel(cfg.candidateRotationMinutes)}。間隔を空けてから実行されます）`,
+      );
+      return;
+    }
+  }
+
+  // プール選択: maxCandidates 以上確保できるファイルを優先し、なければ件数の多いファイルへ。
   // （全件同期を有効にすれば prototypes.json が自動的に優先される。試作段階では sample-prototypes）
   let pool: ProtopediaWork[] = [];
   let source = '';
   for (const file of POOL_FILES) {
     const works = readPool(file);
-    if (works.length >= CANDIDATES_PER_SLOT) {
+    if (works.length >= cfg.maxCandidates) {
       pool = works;
       source = file;
       break;
@@ -88,7 +145,10 @@ function main(): void {
   }
 
   // buildCandidatesFile はプール0件で例外（= ここに来るのは1件以上）。
-  const file = buildCandidatesFile(pool, slot, repoRelative(source), new Date());
+  const file = buildCandidatesFile(pool, slot, repoRelative(source), new Date(), {
+    slotMinutes: cfg.candidateRotationMinutes,
+    maxCandidates: cfg.maxCandidates,
+  });
 
   console.log(
     `✅ slot=${file.slot} 候補${file.candidates.length}件（プール${pool.length}件 / source=${source}）`,
@@ -97,7 +157,9 @@ function main(): void {
     const by = c.authors && c.authors.length > 0 ? ` / ${c.authors[0]}` : '';
     console.log(`   - ${c.id} ${c.title}${by}`);
   }
-  console.log(`   次回更新予定: ${file.nextSlot}（UTCの15分境界で切り替わり）`);
+  console.log(
+    `   次回更新予定: ${file.nextSlot}（UTCの${cfg.candidateRotationMinutes}分間隔の境界で切り替わり）`,
+  );
 
   if (dryRun) {
     console.log('🏁 dry-run: data/current-candidates.json は変更していません。');
