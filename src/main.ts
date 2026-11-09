@@ -1,10 +1,11 @@
 import './style.css';
-import type { Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
+import type { Offspring, ParentId, ProtopediaWork, Workset } from '../lib/types.ts';
 import { newIssueUrl, repoConfigFromEnv } from '../lib/config.ts';
 import { slotKey } from '../lib/generation.ts';
 import rawOffspring from '../data/offspring.json';
 import sampleWorksJson from '../data/protopedia-sample.json';
 import rawSampleOffspring from '../data/offspring.sample.json';
+import rawWorkset from '../data/prototypes.json';
 
 // ---------------------------------------------------------------------------
 // データ読み込み
@@ -14,8 +15,18 @@ const offspring = (rawOffspring as unknown as Offspring[]).slice();
 const sampleWorks = (sampleWorksJson as { works: ProtopediaWork[] }).works;
 const sampleOffspring = (rawSampleOffspring as unknown as Offspring[]).slice();
 
-// ProtoPedia API未接続のため、現時点では開発用サンプル作品のみを表示する。
-const works: ProtopediaWork[] = sampleWorks;
+// 同期済みのProtoPedia作品（Actionsが scripts/sync-protopedia.ts で更新する）。
+// ブラウザからProtoPedia APIは呼ばない（docs/protopediaapi.md §7）。
+// 未同期なら開発用サンプルに落とし、[SAMPLE] 表記で本番と区別する。
+const workset = rawWorkset as Workset;
+const realWorks: ProtopediaWork[] = Array.isArray(workset.works)
+  ? workset.works.filter(
+      (w): w is ProtopediaWork =>
+        !!w && typeof w.id === 'string' && /^protopedia:\d{1,9}$/.test(w.id) && !!w.title,
+    )
+  : [];
+const usingSampleWorks = realWorks.length === 0;
+const works: ProtopediaWork[] = usingSampleWorks ? sampleWorks : realWorks;
 // 本番データが0件の間はサンプル子作品も表示する（家系図が空にならないように。
 // 各データは sample フラグ・[SAMPLE]表記つきで本番と明確に区別される）。
 const showSampleOffspring = offspring.length === 0;
@@ -196,23 +207,68 @@ const pickerSection = el('section', {}, el('h2', {}, '親作品を選ぶ'));
 
 const picker = el('div', { class: 'picker' });
 
-function parentSelect(id: string, labelText: string): HTMLSelectElement {
-  const sel = el('select', { id });
-  sel.append(el('option', { value: '' }, '— 選択してください —'));
+/** 検索クエリに一致するか（名前・概要・作者・タグ / 大文字小文字は無視）。 */
+function matchesQuery(w: ProtopediaWork | Offspring, q: string): boolean {
+  if (!q) return true;
+  const parts = [w.title, w.summary];
+  if ('authors' in w && Array.isArray(w.authors)) parts.push(...w.authors);
+  if ('tags' in w && Array.isArray(w.tags)) parts.push(...w.tags);
+  return parts.join(' ').toLowerCase().includes(q);
+}
+
+/** セレクトの選択肢を（検索クエリで絞って）作り直す。 */
+function fillParentOptions(sel: HTMLSelectElement, q: string): void {
+  const prev = sel.value;
+  // 絞り込みに一致しない場合でも、選択中の作品はリストに残す
+  // （検索中に選択が黙って解除されるのを防ぐ）。
+  const include = (w: ProtopediaWork | Offspring): boolean =>
+    matchesQuery(w, q) || w.id === prev;
+
+  sel.replaceChildren(el('option', { value: '' }, '— 選択してください —'));
   const groupProto = el('optgroup', { label: 'ProtoPedia作品（第0世代）' });
   const groupChild = el('optgroup', { label: '生まれた子作品' });
   for (const w of works) {
-    groupProto.append(el('option', { value: w.id }, `${w.title} (${w.id})`));
+    if (!include(w)) continue;
+    const by = w.authors && w.authors.length > 0 ? ` / ${w.authors[0]}` : '';
+    groupProto.append(el('option', { value: w.id }, `${w.title}${by} (${w.id})`));
   }
   for (const c of children) {
+    if (!include(c)) continue;
     groupChild.append(
       el('option', { value: c.id }, `第${c.generation}世代 ${c.title} (${c.id})`),
     );
   }
   sel.append(groupProto, groupChild);
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
+function parentSelect(id: string, labelText: string): HTMLSelectElement {
+  const sel = el('select', { id });
   const field = el('div', {}, el('label', { for: id }, labelText), sel);
   picker.append(field);
+  fillParentOptions(sel, '');
   return sel;
+}
+
+// --- 作品検索（発明図鑑の入口。API同期済み作品が増えてから価値が出る） -------
+const filterInput = el('input', {
+  id: 'work-filter',
+  type: 'search',
+  placeholder: '例: 光る地図, 音, Arduino',
+}) as HTMLInputElement;
+const filterCount = el('span', { class: 'hint' });
+const filterField = el(
+  'div',
+  { class: 'filter' },
+  el('label', { for: 'work-filter' }, '作品を検索（名前・作者・タグ・概要）'),
+  el('div', { class: 'filter-row' }, filterInput, filterCount),
+);
+
+function updateFilterCount(q: string): void {
+  const n = [...works, ...children].filter((w) => matchesQuery(w, q)).length;
+  filterCount.textContent = q
+    ? `${n}件がヒット`
+    : `全${works.length + children.length}件から選べます`;
 }
 
 const selectA = parentSelect('parent-a', '親作品 A（スロットA）');
@@ -224,6 +280,14 @@ const actions = el('div', { class: 'actions' });
 const breedBtn = el('button', { class: 'breed', type: 'button' }, '交配を申請') as HTMLButtonElement;
 const hint = el('span', { class: 'hint' });
 actions.append(breedBtn, hint);
+
+const catalogHint = el(
+  'div',
+  { class: 'hint catalog' },
+  usingSampleWorks
+    ? `作品一覧は開発用サンプル${works.length}件（ProtoPedia未同期。同期Workflowで置き換わります）`
+    : `作品一覧: ProtoPedia ${works.length}件${workset.syncedAt ? `（最終同期: ${workset.syncedAt}）` : ''}`,
+);
 
 const machine = el(
   'div',
@@ -240,6 +304,8 @@ const machine = el(
       el('span', { class: 'lamp coral' }),
     ),
   ),
+  catalogHint,
+  filterField,
   picker,
   actions,
 );
@@ -267,6 +333,15 @@ function refreshBreedButton(): void {
 
 selectA.addEventListener('change', refreshBreedButton);
 selectB.addEventListener('change', refreshBreedButton);
+
+filterInput.addEventListener('input', () => {
+  const q = filterInput.value.trim().toLowerCase();
+  fillParentOptions(selectA, q);
+  fillParentOptions(selectB, q);
+  updateFilterCount(q);
+  refreshBreedButton();
+});
+updateFilterCount('');
 breedBtn.addEventListener('click', () => {
   const pair = currentPair();
   if (!pair || !repoCfg) return;
@@ -536,6 +611,19 @@ function renderDetail(id: string): void {
     add('生成日時', `${node.createdAt} ・ モデル: ${node.model}`);
   } else {
     add('世代', '第0世代（ProtoPediaの元作品）');
+    if (node.authors && node.authors.length > 0) add('作者', node.authors.join(' / '));
+    if (node.tags && node.tags.length > 0) add('タグ', node.tags.join(' / '));
+    if (node.licenseType) add('ライセンス', node.licenseType);
+    if (node.mainUrl) {
+      const img = el('img', {
+        src: node.mainUrl,
+        alt: `${node.title}の作品画像（ProtoPedia）`,
+        loading: 'lazy',
+      });
+      // 画像が届かない場合は枠だけで壊れないように取り除く
+      img.addEventListener('error', () => img.remove());
+      add('作品画像', img);
+    }
     add('出典', el('a', { href: node.sourceUrl, target: '_blank', rel: 'noopener' }, node.sourceUrl));
     if (node.sample) {
       add('注意', '開発用の架空サンプル作品です。実在のProtoPedia作品ではありません。');

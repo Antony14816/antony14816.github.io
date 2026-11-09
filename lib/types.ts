@@ -16,6 +16,30 @@ export interface ProtopediaWork {
   generation: 0;
   /** 開発用サンプルデータかどうか。本番の作品と混同させない。 */
   sample?: boolean;
+  /** 以下は ProtoPedia API v2 同期（docs/protopediaapi.md）で付与される任意フィールド。 */
+  /** メイン画像URL（https のみ許可、取得時に検証済み） */
+  mainUrl?: string;
+  /** 作者名（クレジット表示用） */
+  authors?: string[];
+  tags?: string[];
+  /** ライセンス表記（利用条件の確認に使う。実APIでの提供有無は未検証） */
+  licenseType?: string;
+  /** 技術構成（systemDescription）。生成AIへの参考資料として使う。 */
+  systemDescription?: string;
+  /** 詳細説明（freeComment）。長さ上限つき。 */
+  description?: string;
+}
+
+/**
+ * 同期済み作品セット。data/prototypes.json の形。
+ * GitHub Pages はこれを読むだけで ProtoPedia API を直接呼ばない。
+ */
+export interface Workset {
+  schemaVersion: 1;
+  source: 'protopedia-api-v2' | 'mock';
+  /** 最終同期日時（ISO 8601）。未同期なら null。 */
+  syncedAt: string | null;
+  works: ProtopediaWork[];
 }
 
 /** 継承した特徴の記述。 */

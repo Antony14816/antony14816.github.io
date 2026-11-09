@@ -5,9 +5,10 @@
 import { readFileSync } from 'node:fs';
 import { computeGeneration, isAncestorDescendantPair, nextOffspringId } from '../lib/generation.ts';
 import { samePair } from '../lib/issue.ts';
-import type { Offspring } from '../lib/types.ts';
+import type { Offspring, Workset } from '../lib/types.ts';
 
 const FILE = new URL('../data/offspring.json', import.meta.url);
+const WORKSET_FILE = new URL('../data/prototypes.json', import.meta.url);
 
 function fail(msg: string): never {
   console.error(`❌ ${msg}`);
@@ -88,3 +89,43 @@ for (const item of items) {
 
 const next = nextOffspringId(expectedNextId);
 console.log(`✅ ${items.length}件の子作品が検証OK（次のID: ${next}）`);
+
+// --- data/prototypes.json（ProtoPedia同期データ） --------------------------
+// 未同期（works: []）は正常状態。壊れた形だけを検出する。
+
+let worksetRaw: unknown;
+try {
+  worksetRaw = JSON.parse(readFileSync(WORKSET_FILE, 'utf8'));
+} catch (e) {
+  fail(`data/prototypes.json を読めません: ${String(e)}`);
+}
+
+if (typeof worksetRaw !== 'object' || worksetRaw === null) {
+  fail('prototypes.json はオブジェクトである必要があります');
+}
+const workset = worksetRaw as Workset;
+if (workset.schemaVersion !== 1) fail('prototypes.json: schemaVersion が 1 ではありません');
+if (workset.source !== 'protopedia-api-v2' && workset.source !== 'mock') {
+  fail('prototypes.json: source が不正');
+}
+if (workset.syncedAt !== null && typeof workset.syncedAt !== 'string') {
+  fail('prototypes.json: syncedAt は文字列または null');
+}
+if (!Array.isArray(workset.works)) fail('prototypes.json: works が配列ではありません');
+
+const workIds = new Set<string>();
+for (const w of workset.works) {
+  const wfail = (msg: string): never => fail(`prototypes.json ${w?.id ?? '(不明)'}: ${msg}`);
+  if (typeof w?.id !== 'string' || !/^protopedia:\d{1,9}$/.test(w.id)) wfail('id 形式が不正');
+  if (workIds.has(w.id)) wfail('id が重複しています');
+  workIds.add(w.id);
+  if (w.generation !== 0) wfail('generation は 0 である必要があります');
+  if (typeof w.title !== 'string' || w.title.length === 0) wfail('title が空');
+  if (typeof w.sourceUrl !== 'string' || !w.sourceUrl.startsWith('https://protopedia.net/')) {
+    wfail(`sourceUrl が想定外: ${String(w.sourceUrl)}`);
+  }
+  if (w.sample) wfail('本番データに sample フラグは付かない');
+}
+console.log(
+  `✅ prototypes.json ${workset.works.length}件 OK（同期: ${workset.syncedAt ?? '未実施'}）`,
+);

@@ -13,6 +13,7 @@ ProtoPediaに公開された実在の作品を2つ「親」として選び、生
 | 公開UI | GitHub Pages（Vite + TypeScript の静的サイト） |
 | 投稿 | GitHub Issues（サイトにログイン機能・書き込みトークンなし） |
 | 交配ワーカー | GitHub Actions（毎時実行 + 手動 `workflow_dispatch`） |
+| 作品データ | ProtoPedia API v2 → Actionsが同期 → `data/prototypes.json`（**ブラウザはAPIを呼ばない**） |
 | 永続データ | リポジトリ内の `data/offspring.json` |
 | AI | Actions（サーバー側）から呼ぶ交換可能なプロバイダー |
 
@@ -38,14 +39,37 @@ npm run dev            # http://localhost:5173
 | `VITE_GITHUB_REPO` | Issue作成リンクのrepo | ローカルのみ |
 | `GITHUB_REPOSITORY` | Actionsが自動提供。ビルド時にクライアントへ注入 | Actions |
 | `AI_API_KEY` | 生成AIプロバイダーのキー（**GitHub Secretsのみ**） | 交配処理時 |
+| `PROTOPEDIA_API_V2_TOKEN` | ProtoPedia API v2のトークン（**GitHub Secrets / ローカルenvのみ。VITE_ プレフィックス禁止**） | 作品同期時 |
 
 ## GitHub上の設定（手動）
 
 1. **Pages**: Settings → Pages → Source を `GitHub Actions` に設定（`deploy.yml` が push のたびにテスト → ビルド → デプロイ。base パスと Issue リンクは `GITHUB_REPOSITORY` から自動導出するため、リポジトリをフォークしても再設定不要）。
 2. **Issues**: Settings → Issues でラベル `breeding-request` を用意（ワークフロー側で管理。利用者が付ける前提にしない）。
-3. **Secrets**: Settings → Secrets and variables → Actions に `AI_API_KEY` を登録（未設定時はドライランのみ）。
+3. **Secrets**: Settings → Secrets and variables → Actions に登録:
+   - `AI_API_KEY`（交配処理。未設定時はドライランのみ）
+   - `PROTOPEDIA_API_V2_TOKEN`（作品同期。[トークン取得先](https://protopedia.net/settings/application)。未設定時は同期をスキップし既存データを維持）
 4. **Actions権限**: Settings → Actions → General → Workflow permissions を設定。JSONコミットには `contents: write`、Issue対応には `issues: write` を該当ジョブのみに付与。
-5. 交配申請はサイトの「交配申請する」ボタン → Issue作成画面が開く → **ユーザー自身が送信**。
+5. 交配申請はサイトの「交配を申請」ボタン → Issue作成画面が開く → **ユーザー自身が送信**。
+
+## ProtoPedia作品の同期（API v2）
+
+仕様は `docs/protopediaapi.md`（調査資料）を参照。実装は `lib/protopedia.ts` + `scripts/sync-protopedia.ts` + `.github/workflows/sync-prototypes.yml`。
+
+```text
+ProtoPedia API v2 ──(Bearer)──> Actions（毎日 03:20 UTC + 手動 dispatch）
+                                   │ 取得 → HTML除去・型検証・URL検証
+                                   ▼
+                          data/prototypes.json ──> GitHub Pages
+                          （失敗時は既存JSONを一切更新しない）
+```
+
+- **ローカル実行**: `PROTOPEDIA_API_V2_TOKEN=<token> npm run sync:protopedia`
+  - `-- --dry-run`: 取得・検証のみ（書き込まない。トークン要）
+  - `-- --mock`: サンプルデータでパイプライン確認（書き込まない。トークン不要）
+- **失敗時の挙動**: 取得失敗・0件・不正レスポンスでは `prototypes.json` を置き換えない（直前の正常データを維持）。
+- **トークンの扱い**: Secrets/ローカルenvのみ。URL・ログ・JSON・コミット・フロントバンドルに入れない。ブラウザは同期済みJSONだけを読む。
+- 同期後はサイトの「作品一覧: ProtoPedia N件（最終同期: …）」表示に切り替わり、サンプル作品（`[SAMPLE]`）は自動的に表示されなくなる。
+- 作品検索（名前・作者・タグ・概要）と詳細パネルの作者・タグ・ライセンス・作品画像はこのJSONから表示する。
 
 ## 交配申請フォーマット
 
@@ -87,8 +111,13 @@ mode: fusion
 
 ## ステータス / 未検証事項
 
-- [ ] `deploy.yml` の実動作 — **未検証**（ローカルではYAML構文・`GITHUB_REPOSITORY`注入・`npm ci`の整合のみ確認。初回push後のActions実行結果を確認すること）。
-- [ ] ProtoPedia APIの公式仕様（認証・レート制限・ライセンス）— **未検証**。実装時に公式資料を確認する。
+- [ ] `deploy.yml` / `sync-prototypes.yml` の実動作 — **未検証**（ローカルではYAML構文・スクリプト単体・`GITHUB_REPOSITORY`注入・`npm ci`の整合のみ確認。初回push後のActions実行結果を確認すること）。
+- [ ] ProtoPedia API v2 の**認証済み実接続** — **未検証**（仕様書 `docs/protopediaapi.md` に基づく実装のみ）。実トークンで要確認:
+  - `results` 配列の実構造とフィールド型（`fetchPrototypeList`の抽出候補は `results`/`items`/`data`/`list`）
+  - `releaseFlg` の値の意味（欠損=公開扱いの暫定実装）
+  - 作品ページURLの実パス（`https://protopedia.net/prototype/<id>` は推定、APIにURLフィールドがあれば優先）
+  - `users` / `tags` の要素構造（`userNm`/`tagNm` 仮定）、`licenseType` の提供有無
+  - レート制限・1レスポンスの件数上限・説明文の文字数上限
 - [ ] 生成AIプロバイダーの選定（料金・無料枠・構造化出力）— **未検証**。`AI_API_KEY` 未設定時はドライラン。
 - [ ] `data/offspring.json` へのコミットとブランチ保護の兼ね合い — Actions実装時に確認、必要ならPR方式へ。
 

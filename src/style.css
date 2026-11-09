@@ -408,20 +408,54 @@ section > h2::before {
 }
 
 /* 矢印 = 段付き三角形（12×8, 2pxステップ） */
-.picker select {
+.picker select,
+.filter input {
   width: 100%;
-  padding: 11px 36px 11px 12px;
+  padding: 11px 12px;
   border: 3px solid var(--line);
   border-radius: 0;
   background-color: var(--window-2);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 0H12V2H10V4H8V6H7V8H5V6H4V4H2V2H0Z' fill='%23202735'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  appearance: none;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 0.95rem;
   box-shadow: inset 0 0 0 2px var(--inner);
+}
+
+.picker select {
+  padding: 11px 36px 11px 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 0H12V2H10V4H8V6H7V8H5V6H4V4H2V2H0Z' fill='%23202735'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  appearance: none;
+}
+
+/* --- 作品検索（マシン内） -------------------------------------------------- */
+
+.machine .catalog {
+  padding: 10px 18px 0;
+}
+
+.filter {
+  padding: 14px 18px 0;
+}
+
+.filter label {
+  display: block;
+  font-family: var(--font-dot);
+  font-size: 0.88rem;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-row .hint {
+  white-space: nowrap;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -710,6 +744,17 @@ ul.offspring .hint {
 .detail ul {
   margin: 4px 0 0;
   padding-left: 22px;
+}
+
+/* 作品画像（ProtoPediaのメイン画像。ドット化しない / DESIGN §5.2） */
+.detail img {
+  display: block;
+  margin-top: 6px;
+  max-width: min(320px, 100%);
+  max-height: 240px;
+  object-fit: contain;
+  background: var(--window-2);
+  border: 3px solid var(--line);
 }
 
 button.linkish {
