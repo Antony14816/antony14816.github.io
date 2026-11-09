@@ -1,0 +1,92 @@
+# 発明の配合（issue #16 / 追加開発指示 §11）。
+# Cloudflare Workers AI（gpt-oss-20b）で発明を1件生成し、FLUX.1 schnellでサムネイルを1枚生成。
+# data/ と public/static/assets/inventions/ をコミットし、結果をIssueへコメントしてクローズする。
+#
+# 実行可否（issue #15 / 追加開発指示 §10）: cron はJSONを読めないため、ワークフローは
+# 一定間隔で「起床」するだけ。間隔・連続失敗冷却・日次AI上限の判定は
+# scripts/process-breeding.ts が config/schedule.json + data/breeding-state.json で行う
+# （=「間隔を空けて最大1件」。cronの正時厳密実行は保証しない仕様のまま）。
+#
+# 手動実行（workflow_dispatch）の dry_run は既定 true:
+#   AI呼び出し・データ書き込み・Issue操作をすべて禁止（本番枠も消費しない）。
+name: Breed (Workers AI)
+
+on:
+  schedule:
+    # 起床間隔は15分固定（:09/:24/:39/:54）。rotate-candidates（:04）と+5分ずらし、
+    # 正時（:00）の高負荷を避ける。実効的な配合間隔は max(設定値, 起床間隔15分)。
+    - cron: '9/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'ドライラン（AI呼び出し・データ書き込み・Issue操作をすべて禁止）'
+        type: boolean
+        default: true
+
+# Issue対応とJSON/画像コミットに必要な最小権限のみ（ジョブ単位）。
+permissions: {}
+
+concurrency:
+  # 直列化: 同時実行・再実行があっても1時間枠の上限を破らない（AGENTS.md）。
+  group: breed
+  cancel-in-progress: false
+
+jobs:
+  breed:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # data/・画像のコミット
+      issues: write # 却下/失敗コメント（スクリプト経由）と結果コメント・クローズ
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      # sharp（画像PNG変換）を使うため依存インストールが必要。
+      - name: Install dependencies
+        run: npm ci
+
+      # 外部入力（Issue本文等）はシェル・Actions式へ埋め込まない（スクリプトがAPIから取得）。
+      # Secrets は env のみ（ログ・ファイル・フロントへは出さない）。
+      # DRY_RUN: schedule実行は空文字（=本番）、dispatchは入力値 true/false。
+      - name: Process breeding request
+        id: breed
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          GITHUB_TOKEN: ${{ github.token }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: node --experimental-strip-types scripts/process-breeding.ts
+
+      # コミットは失敗時（exit 1）でも行う: 失敗記録（processed-issues / breeding-state /
+      # 利用量 / キャッシュ）を残さないと、同じ失敗を無限に再処理してしまうため。
+      # dry-run はスクリプトが一切書かないため差分自体が出ない。
+      - name: Commit results
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ public/static/assets/inventions/
+          if git diff --cached --quiet; then
+            echo "変更なし"
+            exit 0
+          fi
+          git commit -m "feat(data): 発明の配合結果を追加 $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push
+
+      # 結果コメント＆クローズは**コミット成功の後**（AGENTS.md: コミット後にIssueへリンク）。
+      # 本文はスクリプトが書いたファイルを --body-file で読む = AI出力を shell へ埋め込まない。
+      - name: Comment result on issue
+        if: ${{ steps.breed.outputs.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ steps.breed.outputs.issue_number }}
+        run: |
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file tmp/breed-report.md
+          gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" --reason "completed"

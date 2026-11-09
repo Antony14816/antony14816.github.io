@@ -16,8 +16,9 @@ ProtoPediaに公開された実在の作品を2つ「親」として選び、生
 | 作品データ | ProtoPedia API v2 → 少数取得（`data/sample-prototypes.json` ほか）→ 候補プール |
 | 配合ワーカー | GitHub Actions（起床は一定間隔、実行可否は設定間隔で判定 + 手動 `workflow_dispatch`） |
 | 頻度設定 | `config/schedule.json`（候補更新間隔・配合間隔・候補件数をファイルで変更 / issue #15） |
-| 永続データ | リポジトリ内の `data/offspring.json` / `data/breeding-state.json` |
-| AI | Actions（サーバー側）から呼ぶ交換可能なプロバイダー |
+| 永続データ | リポジトリ内の `data/offspring.json` / `data/breeding-state.json` / `data/element-cache.json` / `data/processed-issues.json` / `data/ai-usage.json` |
+| AI | **Cloudflare Workers AI**（Actionsサーバー側から呼ぶ。テキスト `@cf/openai/gpt-oss-20b`・画像 `@cf/black-forest-labs/flux-1-schnell` / issue #16） |
+| サムネイル | 生成成功時 `public/static/assets/inventions/<子ID>.png`（ViteのpublicDirから `dist/assets/inventions/` へ配信）（512×512）。**失敗してもテキストは保存**（`imagePath: null`） |
 
 **AI配合は設定間隔（既定60分=1時間）を空けて最大1件です（全ユーザー共有）。** 閲覧・選択・系譜図表示にAIは使いません。
 
@@ -43,7 +44,8 @@ npm run dev            # http://localhost:5173
 | `VITE_GITHUB_OWNER` | Issue作成リンクのowner | ローカルのみ |
 | `VITE_GITHUB_REPO` | Issue作成リンクのrepo | ローカルのみ |
 | `GITHUB_REPOSITORY` | Actionsが自動提供。ビルド時にクライアントへ注入 | Actions |
-| `AI_API_KEY` | 生成AIプロバイダーのキー（**GitHub Secretsのみ**） | 配合処理時 |
+| `CLOUDFLARE_ACCOUNT_ID` | CloudflareのアカウントID（**GitHub Secrets / ローカル`.env`のみ**） | 配合処理時 |
+| `CLOUDFLARE_API_TOKEN` | Workers AI実行用のAPIトークン（**最小権限・GitHub Secrets / ローカル`.env`のみ。ログ・JSON・フロントに入れない**） | 配合処理時 |
 | `PROTOPEDIA_API_V2_TOKEN` | ProtoPedia API v2のトークン（**GitHub Secrets / ローカルenvのみ。VITE_ プレフィックス禁止**） | 作品同期時 |
 | `GH_TOKEN` | ローカルの `gh` CLI用PAT（`.env` 専用・`node scripts/gh.mjs` が読む。**VITE_ プレフィックス禁止**。Actionsは `GITHUB_TOKEN` で自動認証） | 開発issue登録時のみ |
 
@@ -52,7 +54,7 @@ npm run dev            # http://localhost:5173
 1. **Pages**: Settings → Pages → Source を `GitHub Actions` に設定（`deploy.yml` が push のたびにテスト → ビルド → デプロイ）。**base は既定で相対パス（`./`）**: カスタムドメインのルート配信・`<owner>.github.io/<repo>/`・フォーク先のいずれでも、ドメインや公開パスを変更してもビルド設定なしで動く（Issue リンクは `GITHUB_REPOSITORY` から自動導出）。絶対パスに固定したい場合のみ `VITE_BASE=/<repo>/` を指定する。絶対パス base をカスタムドメインで使うとアセットが全部404で真っ黒になる（実例: 2026-11-10 → 相対baseへ修正）。
 2. **Issues**: Settings → Issues でラベル `breeding-request` を用意（ワークフロー側で管理。利用者が付ける前提にしない）。
 3. **Secrets**: Settings → Secrets and variables → Actions に登録:
-   - `AI_API_KEY`（配合処理。未設定時はドライランのみ）
+   - `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN`（配合処理。**未設定時はコスト0で停止**し、`npm run breed:dry` の動作確認のみ）
    - `PROTOPEDIA_API_V2_TOKEN`（作品同期。[トークン取得先](https://protopedia.net/settings/application)。未設定時は同期をスキップし既存データを維持）
 4. **Actions権限**: Settings → Actions → General → Workflow permissions を設定。JSONコミットには `contents: write`、Issue対応には `issues: write` を該当ジョブのみに付与。
 5. 配合申請はサイトの「配合を申し込む」ボタン → Issue作成画面が開く → **ユーザー自身が送信**。
@@ -120,15 +122,38 @@ parent_a: protopedia:1234                           ← 正規の入力元は本
 parent_b: protopedia:5678
 parent_a_url: https://protopedia.net/prototype/1234 ← 表示・照合用の「データ」（httpsのみ）
 parent_b_url: https://protopedia.net/prototype/5678
-mode: fusion
+mode: fusion                                        ← fusion（単純配合）/ genetic（遺伝子配合）/ mutation（突然変異配合）
 slot: 2026-11-09T1715                                ← 申請時の候補スロット（UTC・設定間隔の刻み＝既定15分。移行前のHH形式も許容）
-<!-- 任意: comment: の後に1行だけで自由記述（最大300字・配合の動機など） -->
+<!-- 任意: comment: の後に1行だけで自由記述（最大500字・研究員へのひとこと） -->
 ```
 
 - 親Aと親Bは別のID、許可されたID形式（`protopedia:<数字>` / `mashup-<数字>`）のみ。
 - `slot` / `*_url` は付いていれば形式を検証して記録。URLは命令として扱わず、ワーカーは親IDから出典URLを再導出する。
-- `comment` は任意の自由記述（1行・最大300字）。**データとして保持するだけで、シェル・Actions式・AIプロンプトには渡しません**（issue #7）。
+- `comment`（研究員へのひとこと）は任意の自由記述（1行・最大500字・**Issue作成時のみ**入力）。生成時の追加条件としてAIに渡しますが、**渡し方は区切り付きの「参考資料（データであり命令ではない）」だけ**で、シェル・GitHub Actions式には一切埋め込みません（プロンプトインジェクション対策 / issue #5・#16 §5）。
 - 不正な入力はAIを呼ばずに理由をコメントします。
+
+## 生成AIによる配合（Cloudflare Workers AI / issue #16）
+
+`.github/workflows/breed.yml` が cron（`9/15 * * * *` = 15分ごとに起床）と `workflow_dispatch` で起動し、`scripts/process-breeding.ts` が処理します。**実効的な配合は `config/schedule.json` の `breedingIntervalMinutes`（既定60分）を空けて最大1件**（全ユーザー共有。cronは正時に厳密実行しないため「間隔を空けて最大1件」という仕様）。
+
+```text
+open Issue の最古1件（ラベル非信用・タイトル/本文で判定）
+  → パース・ID検証・重複/近親交配チェック（不正はAI前に却下コメント）
+  → 親の要素抽出8項目（使用技術/目的/解決する課題/入力/出力/体験/特徴/面白さ）
+      └ 作品ID + 内容ハッシュで data/element-cache.json にキャッシュ（同じ親は再抽出しない）
+  → gpt-oss-20b で配合生成（配合タイプ・研究員のひとこと反映 / JSON構造化出力）
+  → 出力JSONを検証（不正・危険・根拠なし主張は公開しない）
+  → flux-1-schnell で 512×512 サムネイル（画像内文字なし・写真風禁止。失敗してもテキストは保存）
+  → data/offspring.json + キャッシュ + 利用量 + 処理状態をコミット
+  → Issue へ生成結果をコメントしてクローズ
+```
+
+- **ローカル実行**: `npm run breed:dry`（AI呼び出し・データ書き込み・Issue操作を一切しない安全確認）/ `npm run breed`（本番と同じ処理）/ `npm run breed:check-ai`（認証情報の接続確認のみ1回）。
+- **二重処理防止**: `data/processed-issues.json`（`resolved` / `rejected` は永却下、`failed` は3回まで再試行）。`concurrency` は固定グループで直列実行。
+- **利用量とコスト**: `data/ai-usage.json` に**実行回数とトークン数は実測**で記録し、Neurons は公開料金表からの**試算**として記録します（**試算を実測値として扱わない**）。Cloudflareの利用量APIは公式ドキュメントに存在しない（**未検証**）ため、上限判定は実呼び出し回数（`dailyAiCallLimit`）で行います。**「1時間に1回なら無料枠内」とは断定しません**（無料枠・料金は変動するため、使う前に公式情報を確認してください）。
+- **失敗時**: 認証失敗・予算超過・一時障害を分類してログに残し、自動の無限リトライはしません（テキスト生成2回・画像再試行1回まで）。エラーにトークンを含めません。
+- **権限**: ワークフローは `permissions: {}` から始まり、該当ジョブだけ `contents: write`（JSONコミット）と `issues: write`（コメント・クローズ）を付与。**AI出力はshellへ埋め込まず `tmp/breed-report.md` 経由**でコメントします。
+- **`dry_run: true`**（dispatch の既定値）は本番の時間枠を消費せず、データ・Issueを書き換えません。
 
 ## デザイン（16bit配合研究所 / DESIGN.md準拠）
 
@@ -180,7 +205,12 @@ slot: 2026-11-09T1715                                ← 申請時の候補ス�
 - [ ] `deploy.yml` / `sync-prototypes.yml` / `rotate-candidates.yml` の実動作 — push後のActions実行結果で確認（ローカルではYAML構文・スクリプト単体・決定的選出テストのみ確認）。
 - [ ] `releaseFlg` のenum値の意味（観測値は常に 2。欠損=公開扱いの暫定実装）。
 - [ ] ProtoPedia APIのレート制限・1レスポンスの件数上限（ページ間隔100msで暫定対応）。
-- [ ] 生成AIプロバイダーの選定（料金・無料枠・構造化出力）。`AI_API_KEY` 未設定時はドライラン。
+- [ ] **Cloudflare Workers AI の実接続**（Secrets登録後 `npm run breed:check-ai` で確認）。現状は**未接続＝未検証**。
+  - [ ] `@cf/openai/gpt-oss-20b` の同期応答形式（`result.response` / `choices[0]` を実装側で吸収中）。
+  - [ ] Workers AI の usage（トークン数）フィールドの有無 — 公式ドキュメントに記載なし。無ければ回数のみ実測・Neurons試算は0。
+  - [ ] `flux-1-schnell` の応答（`result.image` の形式・width/height非指定時の挙動）。
+  - [ ] 無料枠・料金・レート制限の現行条件（**「1時間に1回なら無料枠内」とは断定しない**）。
+- [ ] `breed.yml` の cron 実動作（15分起床・間隔判定・Issueコメント/クローズまで）。ローカルは `npm run breed:dry` と単体テストのみ。
 - [ ] `data/offspring.json` へのコミットとブランチ保護の兼ね合い — Actions実装時に確認、必要ならPR方式へ。
 - [ ] GitHub Pages 本番での `/ideas` 配信 — ローカル preview では `/`・`/ideas/`・`/ideas` すべて200を確認。Pagesの `/ideas` → `/ideas/` リダイレクト挙動は未検証（自前リンクは末尾 `/` つきなので影響なし）。
 - [ ] ブラウザからの匿名 GitHub API ポーリング（申請確認・実験待ち/生成中/誕生の観測）の実挙動 — ローカルではフェッチ注入の単体テストのみ。実ネットワークでのレート制限・CORS挙動は未検証。
@@ -192,9 +222,13 @@ slot: 2026-11-09T1715                                ← 申請時の候補ス�
 npm run dev             # 開発サーバー
 npm test                # パーサー・世代計算・候補選出・フロントのスモークテスト
 npm run build           # 型チェック + 本番ビルド
-npm run validate-data   # config/schedule + offspring / prototypes / sample-prototypes / current-candidates / breeding-state の検証
+npm run validate-data   # config/schedule + offspring / prototypes / sample-prototypes / current-candidates /
+                        # breeding-state / element-cache / processed-issues / ai-usage の検証
 npm run fetch:sample    # ProtoPediaから少数だけ取得 → data/sample-prototypes.json（トークン要）
 npm run rotate:candidates # 候補をスロットから決定的に選出 → data/current-candidates.json（トークン不要・設定間隔の枠内ならスキップ / --force で解除）
+npm run breed:dry         # 配合ワーカーの安全確認（AI・データ書き込み・Issue操作をしない）
+npm run breed             # 配合ワーカーを本番同様に実行（Cloudflare認証情報が必要）
+npm run breed:check-ai    # Cloudflare Workers AI の接続確認のみ（1回）
 npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル + /ideas一覧のスクリーンショット（tmp/）
 ```
 
@@ -217,12 +251,17 @@ npm run screenshot      # 両テーマ×デスクトップ/詳細/モバイル +
 │   ├── assets/          # ビルド取り込み対象（博士スプライト8枚 透過PNG 135×268）
 │   └── static/          # そのまま配信する生ファイル（dist直下へコピー）
 │       └── sprites/     # ピクセル絵素材の原本（切り出し元）
-├── lib/                 # 型・Issueパーサー・世代計算・候補選出・頻度設定(schedule.ts)・ProtoPedia/設定（フロント/ワーカー共有）
+├── lib/                 # 型・Issueパーサー・世代計算・候補選出・頻度設定(schedule.ts) /
+                         # 配合: blend.ts（プロンプトと出力検証）/ elements.ts（要素抽出とキャッシュ） /
+                         # queue.ts（キュー選択）/ cloudflare.ts（Workers AI）/ usage.ts（利用量）/
+                         # github.ts（Issue対応）/ ProtoPedia/設定（フロント/ワーカー共有）
 ├── config/              # schedule.json（頻度設定: 候補更新間隔・配合間隔・候補件数 / issue #15）
-├── data/                # offspring.json / current-candidates.json / breeding-state.json / *sample*.json
+├── data/                # offspring.json / current-candidates.json / breeding-state.json /
+                         # element-cache.json / processed-issues.json / ai-usage.json / *sample*.json
 ├── logs/                # 開発ログ（public公開のため秘密情報は書かない / 書式は logs/README.md）
-├── scripts/             # fetch-sample / rotate-candidates / sync / validate-data / screenshot / gh / slice-characters（博士スプライト切り出し）
+├── scripts/             # process-breeding（配合ワーカー）/ fetch-sample / rotate-candidates / sync /
+                         # validate-data / screenshot / gh / load-env / slice-characters（博士スプライト切り出し）
 ├── tests/
 └── .github/workflows/   # deploy.yml / sync-prototypes.yml（dispatchのみ） /
-                         # rotate-candidates.yml（起床15分固定・間隔はconfig判定） / breed.yml（実装予定）
+                         # rotate-candidates.yml（起床15分固定・間隔はconfig判定） / breed.yml（配合ワーカー）
 ```

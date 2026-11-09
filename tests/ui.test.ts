@@ -7,6 +7,8 @@
 import { expect, it, vi } from 'vitest';
 import rawCandidates from '../data/current-candidates.json';
 import { isCandidatesFile } from '../lib/candidates.ts';
+import { BLEND_MODE_DESCRIPTIONS } from '../lib/types.ts';
+import { parseBreedingIssue } from '../lib/issue.ts';
 
 const candFileValid = isCandidatesFile(rawCandidates);
 /** 候補JSONが有効なら6件（実データ）、無効なら開発用サンプル4件がカードになる。 */
@@ -26,8 +28,10 @@ async function boot() {
     statusVals,
     breedButton: () => document.querySelector('button.breed') as HTMLButtonElement,
     actionHint: () => document.querySelector('.actions .hint') as HTMLElement,
-    // select検索フィールドが無いことの確認用
-    legacyInputs: () => document.querySelectorAll('select, .filter, .picker'),
+    // 検索フィールドが無いことの確認用（select は配合タイプ選択のみ / issue #16 §4）
+    legacyInputs: () => document.querySelectorAll('.filter, .picker'),
+    modeSelect: () => document.querySelector('#blend-mode') as HTMLSelectElement,
+    commentInput: () => document.querySelector('#breed-comment') as HTMLInputElement,
   };
 }
 
@@ -40,7 +44,11 @@ it('タイトル・コピー・注意書きが表示される', async () => {
 
 it('自由検索は廃止され、候補カードだけが並ぶ', async () => {
   const { cards, legacyInputs } = await boot();
-  expect(legacyInputs().length).toBe(0); // select・検索フィールド・ピッカーは無い
+  expect(legacyInputs().length).toBe(0); // 検索フィールド・ピッカーは無い
+  // select は「配合タイプ」1つだけ（issue #16 §4）
+  const selects = Array.from(document.querySelectorAll('select'));
+  expect(selects.length).toBe(1);
+  expect(selects[0].id).toBe('blend-mode');
   expect(cards().length).toBe(expectedCards);
 
   const ids = cards().map((c) => c.dataset.id ?? 'ID欠落');
@@ -402,4 +410,85 @@ it('系譜図の博士は完全な装飾（aria-hidden・二重読み上げし�
   expect(pedChar).toBeTruthy();
   expect(pedChar.getAttribute('aria-hidden')).toBe('true');
   expect(pedChar.hasAttribute('role')).toBe(false);
+});
+
+// --- 配合タイプ・研究員へのひとこと・サムネイル（issue #16） -------------------
+
+it('配合タイプは3種から選び、初期値は単純配合。選択で説明が切り替わる', async () => {
+  const { modeSelect } = await boot();
+  const sel = modeSelect();
+  expect(Array.from(sel.options).map((o) => o.value)).toEqual([
+    'fusion',
+    'genetic',
+    'mutation',
+  ]);
+  expect(sel.value).toBe('fusion');
+  expect(document.querySelector('label[for="blend-mode"]')?.textContent).toBe('配合タイプ');
+
+  const desc = (): string => document.querySelector('.mode-desc')?.textContent ?? '';
+  expect(desc()).toBe(BLEND_MODE_DESCRIPTIONS.fusion);
+
+  sel.value = 'mutation';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(desc()).toBe(BLEND_MODE_DESCRIPTIONS.mutation);
+  expect(desc()).not.toBe(BLEND_MODE_DESCRIPTIONS.fusion);
+});
+
+it('研究員へのひとことは任意・最大500文字（placeholder付き / issue #16 §5）', async () => {
+  const { commentInput } = await boot();
+  expect(commentInput().getAttribute('placeholder')).toBe('例：子どもが遊べる発明にしてほしい！');
+  expect(commentInput().maxLength).toBe(500);
+  expect(document.querySelector('label[for="breed-comment"]')?.textContent).toContain(
+    '最大500文字',
+  );
+  expect(commentInput().value).toBe(''); // 任意（初期は空）
+});
+
+it('Issue本文に mode: と comment: が行として入る（設定済み環境）', async () => {
+  const { pickBtn, breedButton, modeSelect, commentInput } = await boot();
+  const spy = vi.spyOn(window, 'open').mockReturnValue(null);
+  pickBtn(0, 'a').click();
+  pickBtn(1, 'b').click();
+
+  if (!breedButton().disabled) {
+    modeSelect().value = 'genetic';
+    modeSelect().dispatchEvent(new Event('change', { bubbles: true }));
+    commentInput().value = '子どもが遊べる発明にしてほしい！';
+    breedButton().click();
+
+    const body = new URL(String(spy.mock.calls[0][0])).searchParams.get('body') ?? '';
+    expect(body).toContain('mode: genetic');
+    expect(body).toContain('comment: 子どもが遊べる発明にしてほしい！');
+    const r = parseBreedingIssue(body); // UIとワーカーの間の契約
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.request.mode).toBe('genetic');
+  }
+  spy.mockRestore();
+});
+
+it('子作品の行にサムネイル枠と配合タイプバッジがある（issue #16 §12）', async () => {
+  await boot();
+  const li = document.querySelector('ul.offspring li:not(.empty)');
+  expect(li).toBeTruthy();
+  const thumb = li?.querySelector('.li-thumb');
+  expect(thumb).toBeTruthy(); // 画像 or 「画像なし」プレースホルダーのどちらか
+  expect(thumb?.querySelector('img, .thumb-miss')).toBeTruthy();
+  const img = thumb?.querySelector('img');
+  if (img) {
+    expect(img.getAttribute('loading')).toBe('lazy');
+    expect((img.alt ?? '').length).toBeGreaterThan(0);
+  }
+  expect(li?.querySelector('.badge.mode')?.textContent).toBe('単純配合'); // サンプルは fusion
+  expect(li?.querySelector('.badge.idea')?.textContent).toBe('未実装のアイデア');
+});
+
+it('詳細パネルにも配合タイプと利用場面が出る（原作品とAI生成の区別を保つ）', async () => {
+  await boot();
+  const nodes = Array.from(document.querySelectorAll('.pedigree-scroll .node'));
+  (nodes[nodes.length - 1] as SVGGElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const detail = document.querySelector('.detail');
+  expect(detail?.textContent ?? '').toContain('配合タイプ');
+  expect(detail?.querySelector('.badge.idea')?.textContent).toBe(
+    'AIが考えた未実装の発明アイデア',
+  ); // 詳細側の表記は一覧より長い（実在の作品と誤認させない）
 });

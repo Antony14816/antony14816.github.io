@@ -98,8 +98,16 @@ it('タイトル等の外部入力をHTMLとして挿入しない（XSS）', () 
     summary: '"><script>alert(2)</script>',
   };
   const host = build([evil]);
-  expect(host.querySelector('img, script')).toBeNull();
+  expect(host.querySelector('script')).toBeNull();
   expect(host.querySelectorAll('[onclick], [onload], [onerror]').length).toBe(0);
+  // サムネイルの <img> は imagePath 由来だけ（タイトルのHTMLは src/alt 属性に展開されない）
+  const imgs = Array.from(host.querySelectorAll('img'));
+  expect(imgs.length).toBeLessThanOrEqual(1);
+  for (const img of imgs) {
+    expect(img.getAttribute('src') ?? '').toContain('assets/inventions/');
+    expect(img.getAttribute('src') ?? '').not.toContain('onerror=alert');
+    expect(img.hasAttribute('onerror')).toBe(false);
+  }
   // テキストとしてそのまま表示される
   expect(host.textContent).toContain('<img src=x onerror=alert(1)>');
 });

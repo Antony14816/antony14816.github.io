@@ -33,6 +33,8 @@ export interface IssueLinkOptions {
   parentAUrl?: string;
   /** 親Bの元作品URL */
   parentBUrl?: string;
+  /** 研究員へのひとこと（任意・最大MAX_COMMENT_LENGTH字 / issue #16）。1行に正規化して埋め込む。 */
+  comment?: string;
 }
 
 export function newIssueUrl(
@@ -48,6 +50,10 @@ export function newIssueUrl(
   if (opts.parentBUrl) lines.push(`parent_b_url: ${opts.parentBUrl}`);
   lines.push(`mode: ${opts.mode ?? 'fusion'}`);
   if (opts.slot) lines.push(`slot: ${opts.slot}`);
+  // 研究員へのひとこと（issue #16 §5）。改行はすべて空白に畳み、1行形式を保つ
+  // （パーサーは1行キー:値のみ受理。切り詰めは呼び出し側の maxlength と二重の保険）。
+  const comment = opts.comment?.replace(/\s+/g, ' ').trim().slice(0, MAX_COMMENT_LENGTH);
+  if (comment) lines.push(`comment: ${comment}`);
   lines.push(
     '',
     // コメント欄のヒント（issue #7）。HTMLコメントなので投稿後は非表示、編集画面でのみ見える。

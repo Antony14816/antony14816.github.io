@@ -41,6 +41,19 @@ describe('parseBreedingIssue', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('配合タイプ3種（fusion / genetic / mutation）を受理して保持する（issue #16）', () => {
+    for (const mode of ['fusion', 'genetic', 'mutation'] as const) {
+      const r = parseBreedingIssue(
+        `parent_a: protopedia:1\nparent_b: protopedia:2\nmode: ${mode}`,
+      );
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.request.mode).toBe(mode);
+    }
+    // 大文字・前後空白つきなど許可外の表記は却下
+    expect(parseBreedingIssue('parent_a: protopedia:1\nparent_b: protopedia:2\nmode: FUSION').ok).toBe(false);
+    expect(parseBreedingIssue('parent_a: protopedia:1\nparent_b: protopedia:2\nmode: genetic-x').ok).toBe(false);
+  });
+
   it('未対応のschema_versionを却下する', () => {
     const r = parseBreedingIssue('parent_a: protopedia:1\nparent_b: protopedia:2\nschema_version: 99');
     expect(r.ok).toBe(false);
@@ -134,13 +147,13 @@ describe('parseBreedingIssue', () => {
     if (r.ok) expect(r.request.comment).toBeUndefined();
   });
 
-  it('comment は300字超を却下、他フィールドは従来どおり100字', () => {
+  it('comment は500字超を却下（上限はissue #16 §5で300→500へ変更）、他フィールドは100字', () => {
     const over = parseBreedingIssue(
-      `parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: ${'あ'.repeat(301)}`,
+      `parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: ${'あ'.repeat(501)}`,
     );
     expect(over.ok).toBe(false);
     const okLen = parseBreedingIssue(
-      `parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: ${'あ'.repeat(300)}`,
+      `parent_a: protopedia:1\nparent_b: protopedia:2\ncomment: ${'あ'.repeat(500)}`,
     );
     expect(okLen.ok).toBe(true);
     const other = parseBreedingIssue(
@@ -186,6 +199,34 @@ describe('newIssueUrl（候補スロット・元作品URLの連携）', () => {
     const body = new URL(url).searchParams.get('body') ?? '';
     expect(body).not.toContain('slot:');
     expect(parseBreedingIssue(body).ok).toBe(true);
+  });
+
+  it('配合タイプと研究員へのひとことが本文に行として入る（issue #16 §4・§5）', async () => {
+    const { newIssueUrl } = await import('../lib/config.ts');
+    const url = newIssueUrl({ owner: 'o', repo: 'r' }, 'protopedia:1', 'protopedia:2', {
+      mode: 'mutation',
+      comment: '子どもが遊べる発明にしてほしい！',
+    });
+    const body = new URL(url).searchParams.get('body') ?? '';
+    expect(body).toContain('mode: mutation');
+    expect(body).toContain('comment: 子どもが遊べる発明にしてほしい！');
+    const r = parseBreedingIssue(body);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.request.mode).toBe('mutation');
+      expect(r.request.comment).toBe('子どもが遊べる発明にしてほしい！');
+    }
+  });
+
+  it('comment に改行が含まれていても1行に畳んでパーサーが通る', async () => {
+    const { newIssueUrl } = await import('../lib/config.ts');
+    const url = newIssueUrl({ owner: 'o', repo: 'r' }, 'protopedia:1', 'protopedia:2', {
+      comment: '1行目\n2行目\tそして三行目',
+    });
+    const body = new URL(url).searchParams.get('body') ?? '';
+    const r = parseBreedingIssue(body);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.request.comment).toBe('1行目 2行目 そして三行目');
   });
 });
 

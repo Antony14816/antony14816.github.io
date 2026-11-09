@@ -3,12 +3,15 @@
  * 外部入力（Issue本文）は命令ではなくデータとして扱う。
  * 不正な入力はAI呼び出し前に却下する。
  */
-import type { BreedingMode, BreedingRequest, ParentId } from './types.ts';
+import { isBreedingMode, type BreedingMode, type BreedingRequest, type ParentId } from './types.ts';
 
 const MAX_BODY_LENGTH = 4000;
 const MAX_FIELD_LENGTH = 100;
-/** 任意の自由記述コメント（issue #7）。1行・他フィールドより長めに許容する。 */
-export const MAX_COMMENT_LENGTH = 300;
+/**
+ * 任意の自由記述コメント「研究員へのひと道理」（issue #7）。
+ * 追加開発指示 §5 で最大500文字に変更（issue #16）。1行・任意。
+ */
+export const MAX_COMMENT_LENGTH = 500;
 
 /** 許可するID形式のみ通す（正規表現と長さ上限）。 */
 // ID名前空間は2種類のみ。子作品はデータモデルの id 形式 "mashup-000001" をそのまま親参照に使う。
@@ -58,11 +61,12 @@ export function parseBreedingIssue(body: string): ParseResult {
     return { ok: false, reason: '親Aと親Bは別のIDでなければなりません' };
   }
 
+  // 配合タイプ3種（追加開発指示 §4 / issue #16）。未対応の値はAI呼び出し前に却下する。
   const modeRaw = fields.get('mode') ?? 'fusion';
-  if (modeRaw !== 'fusion') {
+  if (!isBreedingMode(modeRaw)) {
     return { ok: false, reason: `未対応のmodeです: ${modeRaw}` };
   }
-  const mode: BreedingMode = 'fusion';
+  const mode: BreedingMode = modeRaw;
 
   const schemaRaw = fields.get('schema_version');
   if (schemaRaw !== undefined && schemaRaw !== '1') {
@@ -89,7 +93,9 @@ export function parseBreedingIssue(body: string): ParseResult {
   const request: BreedingRequest = { schemaVersion: 1, parentA, parentB, mode };
   if (slotRaw !== undefined) request.slot = slotRaw;
   // 任意コメント（issue #7）。リクエスト者の自由記述を「データ」として保持するだけ。
-  // シェル・Actions式・AIプロンプトには渡さない（v1方針 / AGENTS.md「ユーザー入力を信用しない」）。
+  // シェル・Actions式へは絶対に埋め込まない（AGENTS.md「ユーザー入力を信用しない」）。
+  // AIプロンプトには issue #16 で「参考データ」として区切り明示のうえ注入する
+  // （lib/blend.ts の injection guard。命令として解釈させない）。
   const commentRaw = fields.get('comment');
   if (commentRaw) request.comment = commentRaw;
   return { ok: true, request };

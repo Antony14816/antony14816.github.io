@@ -14,6 +14,9 @@
     "sync:protopedia": "node --experimental-strip-types scripts/sync-protopedia.ts",
     "fetch:sample": "node --experimental-strip-types scripts/fetch-sample-prototypes.mjs",
     "rotate:candidates": "node --experimental-strip-types scripts/rotate-candidates.ts",
+    "breed": "node --experimental-strip-types scripts/process-breeding.ts",
+    "breed:dry": "node --experimental-strip-types scripts/process-breeding.ts --dry-run",
+    "breed:check-ai": "node --experimental-strip-types scripts/process-breeding.ts --check-ai",
     "screenshot": "node scripts/screenshot.mjs",
     "deploy": "node scripts/deploy.mjs",
     "gitpush": "node scripts/gitpush.mjs"

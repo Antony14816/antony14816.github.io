@@ -1797,3 +1797,166 @@ li.idea-item {
     animation: none;
   }
 }
+
+/* --- 配合タイプ・研究員へのひとこと（issue #16 / 追加開発指示 §4・§5） -------- */
+
+.apply-fields {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px 0;
+}
+
+.apply-fields .field label {
+  display: block;
+  font-family: var(--font-dot);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+  color: var(--text);
+}
+
+.apply-fields .hint {
+  margin: 5px 0 0;
+  font-size: 0.82rem;
+}
+
+select.blend-mode,
+input.breed-comment {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--window);
+  border: 3px solid var(--line);
+  box-shadow: inset 0 0 0 2px var(--inner);
+  border-radius: 0;
+  padding: 9px 10px;
+}
+
+select.blend-mode:focus,
+input.breed-comment:focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+input.breed-comment::placeholder {
+  color: var(--text-dim);
+  opacity: 0.85;
+}
+
+/* 配合タイプバッジ（色だけに依存させない: ラベル文字で種別を明示） */
+.badge.mode {
+  background: var(--window-2);
+  border: 2px solid var(--lab-mint);
+  color: var(--text);
+}
+
+/* --- サムネイル表示（issue #16 / 追加開発指示 §12） -------------------------- */
+
+.thumb-miss {
+  font-family: var(--font-dot);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.4;
+  padding: 4px;
+}
+
+/* 最近誕生した発明: 左にサムネイル枠 + 右に本文 */
+ul.offspring li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: start;
+}
+
+ul.offspring li.empty {
+  display: block;
+}
+
+.li-thumb {
+  width: 72px;
+  height: 72px;
+  border: 2px solid var(--inner);
+  background: var(--window-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.li-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.li-main {
+  min-width: 0;
+}
+
+/* 詳細パネルのサムネイル（AI生成画像はピクセル化しない = スプライトのみ pixelated） */
+.detail-thumb-wrap {
+  margin: 8px 0 4px;
+}
+
+.detail-thumb {
+  display: block;
+  width: min(256px, 100%);
+  height: auto;
+  border: 3px solid var(--line);
+  box-shadow: inset 0 0 0 2px var(--inner);
+}
+
+.detail-thumb-wrap .thumb-miss {
+  display: block;
+  border: 2px dashed var(--inner);
+  background: var(--window-2);
+  padding: 14px;
+}
+
+/* /ideas のアイデア行 */
+.idea-thumb {
+  width: 120px;
+  height: 120px;
+  border: 2px solid var(--inner);
+  background: var(--window);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.idea-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.idea-thumb .thumb-miss {
+  padding: 8px;
+}
+
+@media (max-width: 760px) {
+  .apply-fields {
+    padding: 14px 14px 0;
+  }
+
+  ul.offspring li {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 4px 10px;
+  }
+
+  .li-thumb {
+    width: 56px;
+    height: 56px;
+  }
+
+  .detail-thumb {
+    width: 100%;
+  }
+}

@@ -1,5 +1,11 @@
 import './style.css';
-import type { Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
+import type { BreedingMode, Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
+import {
+  BLEND_MODE_DESCRIPTIONS,
+  BLEND_MODE_LABELS,
+  BREEDING_MODES,
+} from '../lib/types.ts';
+import { MAX_COMMENT_LENGTH } from '../lib/issue.ts';
 import { newIssueUrl, repoConfigFromEnv } from '../lib/config.ts';
 import { CANDIDATES_PER_SLOT, isCandidatesFile, type CandidatesFile } from '../lib/candidates.ts';
 import {
@@ -633,6 +639,47 @@ const statusNote = el(
     : el('div', { class: 'empty' }, '配合待ちのIssue一覧はリポジトリ設定後に表示されます。'),
 );
 
+// --- 配合タイプと研究員へのひとこと（issue #16 / 追加開発指示 §4・§5） ---------
+// どちらもIssue本文へ記録される（このページからAIを直接呼ぶことはしない）。
+const modeSelect = el('select', { class: 'blend-mode', id: 'blend-mode' }) as HTMLSelectElement;
+for (const m of BREEDING_MODES) {
+  modeSelect.append(el('option', { value: m }, `${BLEND_MODE_LABELS[m]}（${m}）`));
+}
+modeSelect.value = 'fusion'; // 初期値: 単純配合
+const modeDesc = el('p', { class: 'hint mode-desc' }, BLEND_MODE_DESCRIPTIONS.fusion);
+modeSelect.addEventListener('change', () => {
+  const m = modeSelect.value as BreedingMode;
+  modeDesc.textContent = BLEND_MODE_DESCRIPTIONS[m] ?? BLEND_MODE_DESCRIPTIONS.fusion;
+});
+
+const commentInput = el('input', {
+  class: 'breed-comment',
+  type: 'text',
+  id: 'breed-comment',
+  maxlength: String(MAX_COMMENT_LENGTH),
+  placeholder: '例：子どもが遊べる発明にしてほしい！',
+  autocomplete: 'off',
+}) as HTMLInputElement;
+
+const applyFields = el(
+  'div',
+  { class: 'apply-fields' },
+  el('div', { class: 'field mode-field' },
+    el('label', { for: 'blend-mode' }, '配合タイプ'),
+    modeSelect,
+    modeDesc,
+  ),
+  el('div', { class: 'field comment-field' },
+    el('label', { for: 'breed-comment' }, `研究員へのひとこと（任意・最大${MAX_COMMENT_LENGTH}文字）`),
+    commentInput,
+    el(
+      'p',
+      { class: 'hint' },
+      '配合の動機や希望を1行で。公開Issueに記録され、生成の追加条件として使われます。',
+    ),
+  ),
+);
+
 const breedBtn = el('button', { class: 'breed', type: 'button' }, '配合を申し込む') as HTMLButtonElement;
 const hint = el('span', { class: 'hint' });
 const actions = el('div', { class: 'actions' }, breedBtn, hint);
@@ -677,6 +724,7 @@ const machine = el(
   machineHint,
   statusRow,
   statusNote,
+  applyFields,
   actions,
   el('div', { class: 'machine-char' }, higeMachine.el),
 );
@@ -883,6 +931,9 @@ breedBtn.addEventListener('click', () => {
       slot: candidatesFile?.slot,
       parentAUrl: wa && !isOffspring(wa) ? wa.sourceUrl : undefined,
       parentBUrl: wb && !isOffspring(wb) ? wb.sourceUrl : undefined,
+      // 配合タイプと研究員へのひとこと（issue #16）。Issue本文へ1行ずつ記録される。
+      mode: modeSelect.value,
+      comment: commentInput.value.trim() || undefined,
     }),
     '_blank',
     'noopener',
@@ -917,19 +968,47 @@ const listSection = el(
   ),
 );
 const list = el('ul', { class: 'offspring' });
+
+/**
+ * AI生成サムネイル（issue #16 / 追加開発指示 §12）。
+ * imagePath はサイトルート相対パス。生成失敗（null）・読み込み失敗はプレースホルダー。
+ * 外部データの alt は textNode 経由（el の append は文字列 → テキストノード）。
+ */
+function offspringThumb(c: Offspring, base: string, cls: string): HTMLElement {
+  const box = el('div', { class: cls });
+  if (c.imagePath) {
+    const img = el('img', {
+      src: `${base}${c.imagePath}`,
+      alt: `${c.title}のサムネイル（AIが生成した画像）`,
+      loading: 'lazy',
+    });
+    img.addEventListener('error', () =>
+      box.replaceChildren(el('span', { class: 'thumb-miss' }, '画像なし')),
+    );
+    box.append(img);
+  } else {
+    // imagePath === null は「画像生成に失敗してテキストのみ保存」の明示的な状態
+    box.append(el('span', { class: 'thumb-miss' }, '画像なし'));
+  }
+  return box;
+}
+
 const sorted = [...children].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 if (sorted.length === 0) {
   list.append(el('li', { class: 'empty' }, 'まだ子作品は生まれていません。'));
 } else {
   for (const c of sorted) {
-    const li = el(
-      'li',
-      {},
+    const li = el('li', {});
+    li.append(offspringThumb(c, import.meta.env.BASE_URL, 'li-thumb'));
+    const main = el(
+      'div',
+      { class: 'li-main' },
       el(
         'div',
         { class: 'title' },
         c.title,
         el('span', { class: 'badge idea' }, '未実装のアイデア'),
+        el('span', { class: 'badge mode' }, BLEND_MODE_LABELS[c.mode] ?? c.mode),
         c.sample ? el('span', { class: 'badge sample' }, 'SAMPLE') : '',
       ),
       el('div', { class: 'hint' }, c.summary),
@@ -939,11 +1018,12 @@ if (sorted.length === 0) {
         `${c.id} ・ 第${c.generation}世代 ・ ${c.parents[0]} × ${c.parents[1]}`,
       ),
     );
+    li.append(main);
     li.addEventListener('click', () => selectNode(c.id));
     // 子作品も親にできる（AGENTS.md の完成形）。カードと同じ A/B 操作で選択できる。
     const btnA = pickButton('a', c.id, true);
     const btnB = pickButton('b', c.id, true);
-    li.append(el('div', { class: 'li-picks' }, btnA, btnB));
+    main.append(el('div', { class: 'li-picks' }, btnA, btnB));
     pickRegistry.set(c.id, { host: li, badge: null, a: btnA, b: btnB });
     list.append(li);
   }
@@ -1119,9 +1199,30 @@ function renderDetail(id: string): void {
   };
 
   const badges = el('div', {});
+  /** サムネイル（issue #16 §12）。旧データはキー自体が無い（何も出さない）。 */
+  let media: HTMLElement | null = null;
   if (isOffspring(node)) {
     badges.append(el('span', { class: 'badge idea' }, 'AIが考えた未実装の発明アイデア'));
+    badges.append(el('span', { class: 'badge mode' }, BLEND_MODE_LABELS[node.mode] ?? node.mode));
     if (node.sample) badges.append(el('span', { class: 'badge sample' }, 'SAMPLE'));
+    if (node.imagePath) {
+      const img = el('img', {
+        class: 'detail-thumb',
+        src: `${import.meta.env.BASE_URL}${node.imagePath}`,
+        alt: `${node.title}のサムネイル（AIが生成した画像）`,
+        loading: 'lazy',
+      });
+      img.addEventListener('error', () => {
+        media?.replaceChildren(el('span', { class: 'thumb-miss' }, '画像の読み込みに失敗しました'));
+      });
+      media = el('div', { class: 'detail-thumb-wrap' }, img);
+    } else if (node.imagePath === null) {
+      media = el(
+        'div',
+        { class: 'detail-thumb-wrap' },
+        el('span', { class: 'thumb-miss' }, 'サムネイルなし（画像生成に失敗したため、アイデアのテキストのみ保存）'),
+      );
+    }
   } else if (node.sample) {
     badges.append(el('span', { class: 'badge sample' }, '開発用サンプル'));
   }
@@ -1129,8 +1230,14 @@ function renderDetail(id: string): void {
   add('概要', node.summary);
 
   if (isOffspring(node)) {
+    add('配合タイプ', BLEND_MODE_LABELS[node.mode] ?? node.mode);
     add('コンセプト', node.concept);
     add('仕組み', node.mechanism);
+    if (node.useCases && node.useCases.length > 0) {
+      const cases = el('ul', {});
+      for (const u of node.useCases) cases.append(el('li', {}, u));
+      add('利用場面', cases);
+    }
     const traits = el('ul', {});
     for (const t of node.inheritedTraits) {
       traits.append(el('li', {}, `${label(nodeById.get(t.parentId))} から「${t.trait}」を継承`));
@@ -1190,7 +1297,7 @@ function renderDetail(id: string): void {
     }
   }
 
-  detailBox.replaceChildren(el('h3', {}, node.title), badges, dl);
+  detailBox.replaceChildren(el('h3', {}, node.title), badges, ...(media ? [media] : []), dl);
 }
 
 function selectNode(id: string): void {

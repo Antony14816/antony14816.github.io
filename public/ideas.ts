@@ -1,5 +1,6 @@
 import './style.css';
 import type { Offspring, ParentId, ProtopediaWork } from '../lib/types.ts';
+import { BLEND_MODE_LABELS } from '../lib/types.ts';
 import { repoConfigFromEnv } from '../lib/config.ts';
 import { CANDIDATES_PER_SLOT, isCandidatesFile } from '../lib/candidates.ts';
 import { intervalLabel, resolveSchedule } from '../lib/schedule.ts';
@@ -107,6 +108,7 @@ function buildIdeaItem(
 
   const badges = el('div', { class: 'idea-badges' }, el('span', { class: 'badge idea' }, '未実装のアイデア'));
   badges.append(el('span', { class: 'badge gen' }, `第${c.generation}世代`));
+  badges.append(el('span', { class: 'badge mode' }, BLEND_MODE_LABELS[c.mode] ?? c.mode));
   if (c.sample) badges.append(el('span', { class: 'badge sample' }, 'SAMPLE'));
 
   const pa = parentRef(c.parents[0], ctx.base, titleOf);
@@ -148,7 +150,25 @@ function buildIdeaItem(
     );
   }
 
+  // サムネイル（issue #16 §12）。ctx.base はサイトルートへの基点（相対base時は '../'）。
+  // 生成失敗（null）・読み込み失敗はプレースホルダーで枠を保つ。
+  let thumb: HTMLElement | null = null;
+  if (c.imagePath) {
+    const box = el('div', { class: 'idea-thumb' });
+    const img = el('img', {
+      src: `${ctx.base}${c.imagePath}`,
+      alt: `${c.title}のサムネイル（AIが生成した画像）`,
+      loading: 'lazy',
+    });
+    img.addEventListener('error', () => box.replaceChildren(el('span', { class: 'thumb-miss' }, '画像なし')));
+    box.append(img);
+    thumb = box;
+  } else if (c.imagePath === null) {
+    thumb = el('div', { class: 'idea-thumb' }, el('span', { class: 'thumb-miss' }, '画像なし'));
+  }
+
   li.append(
+    ...(thumb ? [thumb] : []),
     badges,
     el('h3', { class: 'idea-title' }, c.title),
     el('p', { class: 'idea-summary' }, c.summary || '（概要なし）'),

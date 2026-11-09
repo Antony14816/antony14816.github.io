@@ -7,7 +7,9 @@ import { CANDIDATES_PER_SLOT, isCandidatesFile } from '../lib/candidates.ts';
 import { computeGeneration, isAncestorDescendantPair, nextOffspringId } from '../lib/generation.ts';
 import { samePair } from '../lib/issue.ts';
 import { isBreedingState, parseScheduleConfig } from '../lib/schedule.ts';
-import type { Offspring, Workset } from '../lib/types.ts';
+import { ELEMENT_KEYS, isWorkElements } from '../lib/elements.ts';
+import { isProcessedIssues } from '../lib/queue.ts';
+import { isBreedingMode, type Offspring, type Workset } from '../lib/types.ts';
 
 const FILE = new URL('../data/offspring.json', import.meta.url);
 const WORKSET_FILE = new URL('../data/prototypes.json', import.meta.url);
@@ -66,6 +68,25 @@ for (const item of items) {
   at(Array.isArray(item.inheritedTraits) && item.inheritedTraits.length === 2, 'inheritedTraits は2件必要');
   at(/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(item.slot), 'slot 形式が不正（YYYY-MM-DDTHH）');
   at(typeof item.sourceIssue === 'number', 'sourceIssue がありません');
+  // 配合タイプ3種（issue #16 / 追加開発指示 §4）
+  at(isBreedingMode(item.mode), `mode が未対応の値です: ${String(item.mode)}`);
+  // サムネイル（issue #16 / 追加開発指示 §8）: null=画像生成失敗（許容）、ありなら実ファイル必須
+  if (item.imagePath !== undefined && item.imagePath !== null) {
+    at(
+      /^assets\/inventions\/mashup-\d{6}\.png$/.test(item.imagePath),
+      `imagePath 形式が不正: ${String(item.imagePath)}`,
+    );
+    if (!existsSync(new URL(`../public/static/${item.imagePath}`, import.meta.url))) {
+      fail(`${item.id}: imagePath の画像ファイルが存在しません: public/${item.imagePath}`);
+    }
+  }
+  if (item.imagePrompt !== undefined) at(typeof item.imagePrompt === 'string', 'imagePrompt が文字列ではありません');
+  if (item.useCases !== undefined) {
+    at(
+      Array.isArray(item.useCases) && item.useCases.every((u) => typeof u === 'string' && u.length > 0),
+      'useCases は文字列の配列である必要があります',
+    );
+  }
 
   for (const p of item.parents) {
     if (p.startsWith('mashup-') && !ids.has(p)) {
@@ -253,4 +274,118 @@ if (existsSync(STATE_FILE)) {
   );
 } else {
   console.log('ℹ️ breeding-state.json は無し（配合ワーカー初回実行時に作成されます）');
+}
+
+// --- data/offspring.sample.json（開発用サンプル・任意） -----------------------
+// 存在しなくてよい。壊れた形だけを検出する（imagePath は実ファイル必須）。
+
+const SAMPLE_OFFSPRING_FILE = new URL('../data/offspring.sample.json', import.meta.url);
+if (existsSync(SAMPLE_OFFSPRING_FILE)) {
+  let sraw: unknown;
+  try {
+    sraw = JSON.parse(readFileSync(SAMPLE_OFFSPRING_FILE, 'utf8'));
+  } catch (e) {
+    fail(`data/offspring.sample.json を読めません: ${String(e)}`);
+  }
+  if (!Array.isArray(sraw)) fail('offspring.sample.json は配列である必要があります');
+  const sampleIds = new Set<string>();
+  for (const s of sraw as Offspring[]) {
+    const sfail = (msg: string): never => fail(`offspring.sample.json ${s?.id ?? '(不明)'}: ${msg}`);
+    if (typeof s?.id !== 'string' || !/^mashup-\d{6}$/.test(s.id)) sfail('id 形式が不正');
+    if (sampleIds.has(s.id)) sfail('id が重複しています');
+    sampleIds.add(s.id);
+    if (!isBreedingMode(s.mode)) sfail(`mode が未対応の値です: ${String(s.mode)}`);
+    if (s.imagePath !== undefined && s.imagePath !== null) {
+      if (!/^assets\/inventions\/mashup-\d{6}\.png$/.test(s.imagePath)) sfail('imagePath 形式が不正');
+      if (!existsSync(new URL(`../public/static/${s.imagePath}`, import.meta.url))) {
+        sfail(`imagePath の画像ファイルが存在しません: public/static/${s.imagePath}`);
+      }
+    }
+  }
+  console.log(`✅ offspring.sample.json ${sampleIds.size}件 OK（開発用サンプル）`);
+}
+
+// --- data/element-cache.json（要素抽出キャッシュ / issue #16） ----------------
+// 壊れたエントリはワーカー側でも読み飛ばされるが、ここでは「壊れていること」自体を検出する。
+
+const CACHE_FILE = new URL('../data/element-cache.json', import.meta.url);
+if (existsSync(CACHE_FILE)) {
+  let craw: unknown;
+  try {
+    craw = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
+  } catch (e) {
+    fail(`data/element-cache.json を読めません: ${String(e)}`);
+  }
+  if (typeof craw !== 'object' || craw === null) fail('element-cache.json はオブジェクトである必要があります');
+  const cache = craw as { schemaVersion?: unknown; entries?: unknown };
+  if (cache.schemaVersion !== 1) fail('element-cache.json: schemaVersion が 1 ではありません');
+  if (typeof cache.entries !== 'object' || cache.entries === null || Array.isArray(cache.entries)) {
+    fail('element-cache.json: entries がオブジェクトではありません');
+  }
+  for (const [key, value] of Object.entries(cache.entries as Record<string, unknown>)) {
+    const cfail = (msg: string): never => fail(`element-cache.json ${key}: ${msg}`);
+    if (typeof value !== 'object' || value === null) cfail('エントリがオブジェクトではありません');
+    const e = value as Record<string, unknown>;
+    if (e.id !== key) cfail('key と id が一致しません');
+    if (typeof e.id !== 'string' || !/^(protopedia:\d{1,9}|mashup-\d{1,9})$/.test(e.id)) {
+      cfail('id 形式が不正');
+    }
+    if (typeof e.version !== 'string' || e.version.length === 0) cfail('version がありません');
+    if (!isWorkElements(e.elements)) cfail('elements が8項目揃っていません');
+    for (const k of ELEMENT_KEYS) {
+      const field = (e.elements as Record<string, unknown>)[k];
+      if (typeof field !== 'string' || field.length > 400) cfail(`elements.${k} が長すぎ/不正`);
+    }
+  }
+  console.log(`✅ element-cache.json ${Object.keys(cache.entries as object).length}件 OK`);
+} else {
+  console.log('ℹ️ element-cache.json は無し（配合ワーカー初回実行時に作成されます）');
+}
+
+// --- data/processed-issues.json（処理済みIssue / issue #16） -------------------
+// 壊れていると二重処理になるため、ここでも形を検証する。
+
+const PROCESSED_FILE = new URL('../data/processed-issues.json', import.meta.url);
+if (existsSync(PROCESSED_FILE)) {
+  let praw: unknown;
+  try {
+    praw = JSON.parse(readFileSync(PROCESSED_FILE, 'utf8'));
+  } catch (e) {
+    fail(`data/processed-issues.json を読めません: ${String(e)}`);
+  }
+  if (!isProcessedIssues(praw)) fail('processed-issues.json の形式が不正です（二重処理の防止に使えません）');
+  console.log(`✅ processed-issues.json ${Object.keys(praw).length}件 OK`);
+} else {
+  console.log('ℹ️ processed-issues.json は無し（配合ワーカー初回実行時に作成されます）');
+}
+
+// --- data/ai-usage.json（利用量記録 / issue #16 §10） --------------------------
+// 壊れていると利用量を推定できないため検証する（試算値であっても記録自体は壊さない）。
+
+const USAGE_FILE = new URL('../data/ai-usage.json', import.meta.url);
+if (existsSync(USAGE_FILE)) {
+  let uraw: unknown;
+  try {
+    uraw = JSON.parse(readFileSync(USAGE_FILE, 'utf8'));
+  } catch (e) {
+    fail(`data/ai-usage.json を読めません: ${String(e)}`);
+  }
+  if (typeof uraw !== 'object' || uraw === null) fail('ai-usage.json はオブジェクトである必要があります');
+  const usage = uraw as { schemaVersion?: unknown; days?: unknown };
+  if (usage.schemaVersion !== 1) fail('ai-usage.json: schemaVersion が 1 ではありません');
+  if (typeof usage.days !== 'object' || usage.days === null || Array.isArray(usage.days)) {
+    fail('ai-usage.json: days がオブジェクトではありません');
+  }
+  for (const [day, value] of Object.entries(usage.days as Record<string, unknown>)) {
+    const ufail = (msg: string): never => fail(`ai-usage.json ${day}: ${msg}`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) ufail('日付キーが不正');
+    if (typeof value !== 'object' || value === null) ufail('エントリがオブジェクトではありません');
+    for (const k of ['textCalls', 'imageCalls', 'inputTokens', 'outputTokens', 'estimatedNeurons']) {
+      const n = (value as Record<string, unknown>)[k];
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) ufail(`${k} が非負整数ではありません`);
+    }
+  }
+  console.log(`✅ ai-usage.json ${Object.keys(usage.days as object).length}日分 OK（Neuronsは試算値）`);
+} else {
+  console.log('ℹ️ ai-usage.json は無し（配合ワーカー初回実行時に作成されます）');
 }
